@@ -7,7 +7,7 @@ use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSStatusBar, NSVariableStatusItemLength,
 };
 use objc2_event_kit::EKEventStore;
-use objc2_foundation::{MainThreadMarker, NSString};
+use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString, ns_string};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -51,6 +51,16 @@ fn main() {
 
         let menu = build_menu(events, &delegate, &dismissed_events, mtm);
         status_item.setMenu(Some(&menu));
+
+        // Register for calendar change notifications
+        let notification_center = NSNotificationCenter::defaultCenter();
+        let notification_name = ns_string!("EKEventStoreChangedNotification");
+        notification_center.addObserver_selector_name_object(
+            &delegate,
+            objc2::sel!(eventStoreChanged:),
+            Some(notification_name),
+            Some(&event_store),
+        );
 
         app.run();
     }

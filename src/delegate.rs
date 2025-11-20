@@ -4,7 +4,7 @@ use objc2::runtime::AnyObject;
 use objc2::{declare_class, msg_send, msg_send_id, mutability, ClassType, DeclaredClass};
 use objc2_app_kit::{NSMenuItem, NSStatusItem, NSWorkspace};
 use objc2_event_kit::EKEventStore;
-use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSURL};
+use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSURL};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -32,6 +32,27 @@ declare_class!(
     }
 
     unsafe impl MenuDelegate {
+        #[method(eventStoreChanged:)]
+        fn event_store_changed(&self, _notification: &NSNotification) {
+            unsafe {
+                let events = fetch_events(&self.ivars().event_store);
+
+                let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
+                let title = get_status_bar_title(&events, &dismissed_set);
+                drop(dismissed_set);
+
+                let menu = build_menu(events, self, &self.ivars().dismissed_events, self.ivars().mtm);
+
+                let status_item = &self.ivars().status_item;
+
+                if let Some(button) = status_item.button(self.ivars().mtm) {
+                    button.setTitle(&NSString::from_str(&title));
+                }
+
+                status_item.setMenu(Some(&menu));
+            }
+        }
+
         #[method(openEvent:)]
         fn open_event(&self, sender: &NSMenuItem) {
             unsafe {
