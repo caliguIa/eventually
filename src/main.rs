@@ -1,9 +1,10 @@
 use chrono::{DateTime, Duration, Local, Timelike};
 use objc2::rc::Retained;
-use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
-use objc2_app_kit::{NSMenu, NSMenuItem, NSStatusBar, NSVariableStatusItemLength, NSApplication, NSApplicationActivationPolicy, NSWorkspace};
+use objc2::runtime::AnyObject;
+use objc2::{declare_class, msg_send, msg_send_id, mutability, ClassType, DeclaredClass};
+use objc2_app_kit::{NSMenu, NSMenuItem, NSStatusBar, NSVariableStatusItemLength, NSApplication, NSApplicationActivationPolicy, NSWorkspace, NSColor, NSFont};
 use objc2_event_kit::{EKEventStore, EKEntityType};
-use objc2_foundation::{ns_string, MainThreadMarker, NSObject, NSString, NSURL};
+use objc2_foundation::{ns_string, MainThreadMarker, NSObject, NSString, NSURL, NSRange};
 use block2::StackBlock;
 
 const MAX_TITLE_LENGTH: usize = 30;
@@ -62,10 +63,11 @@ fn request_calendar_access(store: &EKEventStore) -> bool {
     let (tx, rx) = channel();
     
     unsafe {
-        let block = StackBlock::new(|granted: objc2::runtime::Bool, _error: *mut objc2_foundation::NSError| {
+        let block = StackBlock::new(move |granted: objc2::runtime::Bool, _error: *mut objc2_foundation::NSError| {
             let _ = tx.send(granted.as_bool());
         });
-        store.requestFullAccessToEventsWithCompletion(&block as *const _ as *mut _);
+        let block_ptr: *mut _ = &block as *const _ as *mut _;
+        store.requestFullAccessToEventsWithCompletion(block_ptr);
     }
     
     rx.recv().unwrap_or(false)
@@ -79,7 +81,7 @@ fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
         .unwrap()
         .and_local_timezone(Local)
         .unwrap();
-    let end_of_three_days = (start_of_today + Duration::days(3))
+    let end_of_four_days = (start_of_today + Duration::days(4))
         .date_naive()
         .and_hms_opt(23, 59, 59)
         .unwrap()
@@ -90,7 +92,7 @@ fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
         objc2_foundation::NSDate::dateWithTimeIntervalSince1970(start_of_today.timestamp() as f64)
     };
     let end_ns_date = unsafe { 
-        objc2_foundation::NSDate::dateWithTimeIntervalSince1970(end_of_three_days.timestamp() as f64)
+        objc2_foundation::NSDate::dateWithTimeIntervalSince1970(end_of_four_days.timestamp() as f64)
     };
 
     unsafe {
@@ -136,6 +138,11 @@ fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
 
 fn format_time(dt: &DateTime<Local>) -> String {
     format!("{:02}:{:02}", dt.hour(), dt.minute())
+}
+
+fn is_all_day_event(start: &DateTime<Local>, end: &DateTime<Local>) -> bool {
+    start.time().num_seconds_from_midnight() == 0 &&
+    end.time().num_seconds_from_midnight() == 86399
 }
 
 fn get_status_bar_title(events: &[EventInfo]) -> String {
@@ -199,6 +206,11 @@ fn get_status_bar_title(events: &[EventInfo]) -> String {
 
 fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, mtm: MainThreadMarker) -> Retained<NSMenu> {
     unsafe {
+        extern "C" {
+            static NSForegroundColorAttributeName: &'static AnyObject;
+            static NSFontAttributeName: &'static AnyObject;
+        }
+
         let menu = NSMenu::initWithTitle(mtm.alloc(), ns_string!(""));
 
         if events.is_empty() {
@@ -214,58 +226,121 @@ fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, mtm: MainThreadMa
             let now = Local::now();
             let today = now.date_naive();
             let tomorrow = today + Duration::days(1);
-            let day_after = today + Duration::days(2);
+            let day_after_tomorrow = today + Duration::days(2);
+            let three_days_out = today + Duration::days(3);
 
             let groups = [
                 (
                     today,
-                    format!("Today, {} {}", today.format("%d"), today.format("%b")),
+                    "Today".to_string(),
+                    format!("{} {}", today.format("%d"), today.format("%b")),
                 ),
                 (
                     tomorrow,
-                    format!("Tomorrow, {} {}", tomorrow.format("%d"), tomorrow.format("%b")),
+                    "Tomorrow".to_string(),
+                    format!("{} {}", tomorrow.format("%d"), tomorrow.format("%b")),
                 ),
                 (
-                    day_after,
-                    format!(
-                        "{}, {} {}",
-                        day_after.format("%A"),
-                        day_after.format("%d"),
-                        day_after.format("%b")
-                    ),
+                    day_after_tomorrow,
+                    day_after_tomorrow.format("%A").to_string(),
+                    format!("{} {}", day_after_tomorrow.format("%d"), day_after_tomorrow.format("%b")),
+                ),
+                (
+                    three_days_out,
+                    three_days_out.format("%A").to_string(),
+                    format!("{} {}", three_days_out.format("%d"), three_days_out.format("%b")),
                 ),
             ];
 
-            for (date, header) in &groups {
+            for (date, day_name, date_str) in &groups {
                 let day_events: Vec<_> = events
                     .iter()
                     .filter(|e| e.start.date_naive() == *date)
                     .collect();
 
                 if !day_events.is_empty() {
+                    let header_text = format!("{}, {}", day_name, date_str);
+                    let header_ns_string = NSString::from_str(&header_text);
+                    
+                    let attr_string: Retained<AnyObject> = msg_send_id![
+                        msg_send_id![objc2::class!(NSMutableAttributedString), alloc],
+                        initWithString: &*header_ns_string
+                    ];
+                    
+                    let bold_font = NSFont::boldSystemFontOfSize(0.0);
+                    let day_name_ns = NSString::from_str(day_name);
+                    let day_name_range = NSRange::new(0, day_name_ns.length());
+                    
+                    let _: () = msg_send![
+                        &*attr_string,
+                        addAttribute: NSFontAttributeName,
+                        value: &**bold_font,
+                        range: day_name_range
+                    ];
+                    
                     let header_item = NSMenuItem::initWithTitle_action_keyEquivalent(
                         mtm.alloc(),
-                        &NSString::from_str(header),
+                        ns_string!(""),
                         None,
                         ns_string!(""),
                     );
+                    let _: () = msg_send![&*header_item, setAttributedTitle: &*attr_string];
                     header_item.setEnabled(false);
                     menu.addItem(&header_item);
 
                     for event in day_events {
-                        let time_range = format!(
-                            "{} - {}",
-                            format_time(&event.start),
-                            format_time(&event.end)
-                        );
-                        let item_title = format!("  {} {}", time_range, event.title);
-
+                        let is_all_day = is_all_day_event(&event.start, &event.end);
+                        let time_prefix = if is_all_day {
+                            "All day:".to_string()
+                        } else {
+                            let start_time = format_time(&event.start);
+                            let end_time = format_time(&event.end);
+                            format!("{} - {}", start_time, end_time)
+                        };
+                        
+                        let item_title = format!("  {} {}", time_prefix, event.title);
+                        let item_ns_string = NSString::from_str(&item_title);
+                        
+                        let attr_string: Retained<AnyObject> = msg_send_id![
+                            msg_send_id![objc2::class!(NSMutableAttributedString), alloc],
+                            initWithString: &*item_ns_string
+                        ];
+                        
+                        if !is_all_day {
+                            let start_time_len = format_time(&event.start).chars().count();
+                            let secondary_color = NSColor::secondaryLabelColor();
+                            let dash_and_end_start = 2 + start_time_len + 1;
+                            let end_time_with_dash_len = 2 + format_time(&event.end).chars().count();
+                            let end_time_range = NSRange::new(dash_and_end_start, end_time_with_dash_len);
+                            
+                            let _: () = msg_send![
+                                &*attr_string,
+                                addAttribute: NSForegroundColorAttributeName,
+                                value: &**secondary_color,
+                                range: end_time_range
+                            ];
+                        }
+                        
+                        let is_past = event.end < now;
+                        if is_past {
+                            let tertiary_color = NSColor::tertiaryLabelColor();
+                            let full_range = NSRange::new(0, item_ns_string.length());
+                            
+                            let _: () = msg_send![
+                                &*attr_string,
+                                addAttribute: NSForegroundColorAttributeName,
+                                value: &**tertiary_color,
+                                range: full_range
+                            ];
+                        }
+                        
                         let item = NSMenuItem::initWithTitle_action_keyEquivalent(
                             mtm.alloc(),
-                            &NSString::from_str(&item_title),
+                            ns_string!(""),
                             Some(objc2::sel!(openEvent:)),
                             ns_string!(""),
                         );
+                        let _: () = msg_send![&*item, setAttributedTitle: &*attr_string];
                         
                         item.setTarget(Some(delegate));
                         item.setRepresentedObject(Some(&*NSString::from_str(&event.event_id)));
@@ -299,13 +374,11 @@ fn main() {
 
         let event_store = EKEventStore::init(EKEventStore::alloc());
         
-        println!("Requesting calendar access...");
         if !request_calendar_access(&event_store) {
             eprintln!("Calendar access denied. Please grant access in System Settings > Privacy & Security > Calendars");
             return;
         }
         
-        println!("Fetching events...");
         let events = fetch_events(&event_store);
 
         let delegate = MenuDelegate::new(mtm);
