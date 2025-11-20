@@ -155,15 +155,15 @@ pub fn get_service_name_from_url(url: &str) -> String {
 
 pub fn get_service_icon_from_url(url: &str) -> &'static str {
     if url.contains("slack.com") {
-        "💬"
+        "slack"
     } else if url.contains("zoom.us") {
-        "📹"
+        "video"
     } else if url.contains("meet.google.com") || url.contains("meet.google") {
-        "📞"
+        "google"
     } else if url.contains("teams.microsoft.com") || url.contains("teams.live.com") {
-        "👥"
+        "teams"
     } else {
-        "🎥"
+        "video"
     }
 }
 

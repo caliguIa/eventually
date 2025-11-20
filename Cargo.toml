@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSString", "NSArray", "NSDate", "NSCalendar", "NSDateFormatter", "NSTimeZone", "NSNotification", "NSProcessInfo", "NSURL", "NSAttributedString"] }
-objc2-app-kit = { version = "0.2", features = ["NSResponder", "NSApplication", "NSMenu", "NSMenuItem", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSRunningApplication", "NSWorkspace", "NSColor", "NSFont", "NSAttributedString"] }
+objc2-foundation = { version = "0.2", features = ["NSString", "NSArray", "NSDate", "NSCalendar", "NSDateFormatter", "NSTimeZone", "NSNotification", "NSProcessInfo", "NSURL", "NSAttributedString", "NSGeometry"] }
+objc2-app-kit = { version = "0.2", features = ["NSResponder", "NSApplication", "NSMenu", "NSMenuItem", "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSRunningApplication", "NSWorkspace", "NSColor", "NSFont", "NSAttributedString", "NSImage"] }
 objc2-event-kit = { version = "0.2", features = ["EKEventStore", "EKEvent", "EKCalendar", "EKCalendarItem", "EKObject", "EKTypes", "block2", "objc2-app-kit"] }
 block2 = "0.5"
 chrono = "0.4"
