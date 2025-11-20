@@ -28,6 +28,33 @@ fn load_icon(name: &str) -> Option<Retained<NSImage>> {
     }
 }
 
+fn load_colored_icon(_name: &str, color: &NSColor) -> Option<Retained<NSImage>> {
+    unsafe {
+        let size = objc2_foundation::NSSize::new(16.0, 16.0);
+        let image = NSImage::initWithSize(NSImage::alloc(), size);
+
+        let _: () = msg_send![&*image, lockFocus];
+
+        // Draw a filled circle with the calendar color
+        color.setFill();
+
+        let circle_rect = objc2_foundation::NSRect::new(
+            objc2_foundation::NSPoint::new(4.0, 4.0),
+            objc2_foundation::NSSize::new(8.0, 8.0),
+        );
+
+        let bezier_path: *mut AnyObject = msg_send![
+            objc2::class!(NSBezierPath),
+            bezierPathWithOvalInRect: circle_rect
+        ];
+        let _: () = msg_send![bezier_path, fill];
+
+        let _: () = msg_send![&*image, unlockFocus];
+
+        Some(image)
+    }
+}
+
 pub fn build_menu(
     events: Vec<EventInfo>,
     delegate: &MenuDelegate,
@@ -269,7 +296,13 @@ pub fn build_menu(
                         );
                         let _: () = msg_send![&*item, setAttributedTitle: &*attr_string];
 
-                        if let Some(circle_icon) = load_icon("circle") {
+                        let calendar_color = NSColor::colorWithSRGBRed_green_blue_alpha(
+                            event.calendar_color.0,
+                            event.calendar_color.1,
+                            event.calendar_color.2,
+                            1.0,
+                        );
+                        if let Some(circle_icon) = load_colored_icon("circle", &calendar_color) {
                             item.setImage(Some(&circle_icon));
                         }
 
