@@ -87,7 +87,7 @@ pub fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
                 .with_timezone(&Local);
 
             let event_id_str = event_id.map(|id| id.to_string()).unwrap_or_default();
-            let occurrence_key = format!("{}:{}", event_id_str, start_timestamp as i64);
+            let occurrence_key = format!("{}|||{}", event_id_str, start_timestamp as i64);
 
             let location_str = location.map(|loc| loc.to_string());
 

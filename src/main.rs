@@ -32,10 +32,11 @@ fn main() {
         let events = fetch_events(&event_store);
 
         let dismissed_events = Arc::new(Mutex::new(HashSet::new()));
-        let delegate = MenuDelegate::new(mtm, dismissed_events.clone());
-
+        
         let status_bar = NSStatusBar::systemStatusBar();
         let status_item = status_bar.statusItemWithLength(NSVariableStatusItemLength);
+        
+        let delegate = MenuDelegate::new(mtm, dismissed_events.clone(), event_store.clone(), status_item.clone());
 
         if let Some(button) = status_item.button(mtm) {
             let dismissed_set = dismissed_events.lock().unwrap();
