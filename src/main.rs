@@ -181,19 +181,19 @@ fn get_status_bar_title(events: &[EventInfo]) -> String {
             let mins = until.num_minutes();
 
             let time_str = if mins > 60 {
-                format!("{} hr", mins / 60)
+                format!("{}h", mins / 60)
             } else {
-                format!("{} mins", mins)
+                format!("{}m", mins)
             };
 
             let mut title = event.title.clone();
-            let max_event_len = MAX_TITLE_LENGTH.saturating_sub(time_str.len() + 8);
+            let max_event_len = MAX_TITLE_LENGTH.saturating_sub(time_str.len() + 10);
             if title.len() > max_event_len {
                 title.truncate(max_event_len.saturating_sub(1));
                 title.push('…');
             }
 
-            return format!("{} until {}", time_str, title);
+            return format!("{} in {}", title, time_str);
         }
     }
 
@@ -202,6 +202,20 @@ fn get_status_bar_title(events: &[EventInfo]) -> String {
     } else {
         "No events today".to_string()
     }
+}
+
+fn find_current_or_next_event<'a>(events: &'a [EventInfo]) -> Option<&'a EventInfo> {
+    let now = Local::now();
+    
+    // Check for current event
+    for event in events {
+        if event.start <= now && now <= event.end {
+            return Some(event);
+        }
+    }
+    
+    // Find next future event
+    events.iter().find(|e| e.start > now)
 }
 
 fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, mtm: MainThreadMarker) -> Retained<NSMenu> {
@@ -228,6 +242,8 @@ fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, mtm: MainThreadMa
             let tomorrow = today + Duration::days(1);
             let day_after_tomorrow = today + Duration::days(2);
             let three_days_out = today + Duration::days(3);
+            
+            let current_or_next = find_current_or_next_event(&events);
 
             let groups = [
                 (
@@ -305,6 +321,23 @@ fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, mtm: MainThreadMa
                             msg_send_id![objc2::class!(NSMutableAttributedString), alloc],
                             initWithString: &*item_ns_string
                         ];
+                        
+                        // Check if this is the current or next event
+                        let is_current_or_next = current_or_next
+                            .map(|e| e.event_id == event.event_id)
+                            .unwrap_or(false);
+                        
+                        if is_current_or_next {
+                            // Apply bold font to entire text
+                            let bold_font = NSFont::boldSystemFontOfSize(0.0);
+                            let full_range = NSRange::new(0, item_ns_string.length());
+                            let _: () = msg_send![
+                                &*attr_string,
+                                addAttribute: NSFontAttributeName,
+                                value: &**bold_font,
+                                range: full_range
+                            ];
+                        }
                         
                         if !is_all_day {
                             let start_time_len = format_time(&event.start).chars().count();
