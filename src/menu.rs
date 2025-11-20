@@ -18,8 +18,9 @@ fn load_icon(name: &str) -> Option<Retained<NSImage>> {
         let path = format!("assets/icons/{}.svg", name);
         let path_ns = NSString::from_str(&path);
         if let Some(image) = NSImage::initWithContentsOfFile(NSImage::alloc(), &path_ns) {
-            let size = objc2_foundation::NSSize::new(18.0, 18.0);
+            let size = objc2_foundation::NSSize::new(16.0, 16.0);
             image.setSize(size);
+            image.setTemplate(true);
             Some(image)
         } else {
             None
