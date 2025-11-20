@@ -7,7 +7,7 @@ use objc2_foundation::{ns_string, MainThreadMarker, NSString, NSRange};
 use std::sync::{Arc, Mutex};
 use std::collections::HashSet;
 
-use crate::events::{EventInfo, format_time, is_all_day_event, extract_url_from_location, get_service_name_from_url, find_current_or_next_event};
+use crate::events::{EventInfo, format_time, is_all_day_event, extract_url_from_location, get_service_name_from_url, get_service_icon_from_url, find_current_or_next_event};
 use crate::delegate::MenuDelegate;
 
 pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &Arc<Mutex<HashSet<String>>>, mtm: MainThreadMarker) -> Retained<NSMenu> {
@@ -27,7 +27,8 @@ pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &A
         if let Some(event) = current_or_next {
             if let Some(url) = extract_url_from_location(&event.location) {
                 let service_name = get_service_name_from_url(&url);
-                let join_title = format!("Join {} Event", service_name);
+                let service_icon = get_service_icon_from_url(&url);
+                let join_title = format!("{} Join {} Event", service_icon, service_name);
                 let join_item = NSMenuItem::initWithTitle_action_keyEquivalent(
                     mtm.alloc(),
                     &NSString::from_str(&join_title),
@@ -41,7 +42,7 @@ pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &A
             
             let calendar_item = NSMenuItem::initWithTitle_action_keyEquivalent(
                 mtm.alloc(),
-                ns_string!("Open in Calendar"),
+                ns_string!("📅 Open in Calendar"),
                 Some(objc2::sel!(openEvent:)),
                 ns_string!(""),
             );
@@ -52,7 +53,7 @@ pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &A
             
             let dismiss_item = NSMenuItem::initWithTitle_action_keyEquivalent(
                 mtm.alloc(),
-                ns_string!("Dismiss Event"),
+                ns_string!("⃠ Dismiss Event"),
                 Some(objc2::sel!(dismissEvent:)),
                 ns_string!(""),
             );
@@ -149,12 +150,26 @@ pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &A
                             format!("{} - {}", start_time, end_time)
                         };
                         
-                        let item_title = format!("  {} {}", time_prefix, event.title);
+                        let item_title = format!("  {} {} {}", "⏺", time_prefix, event.title);
                         let item_ns_string = NSString::from_str(&item_title);
                         
                         let attr_string: Retained<AnyObject> = msg_send_id![
                             msg_send_id![objc2::class!(NSMutableAttributedString), alloc],
                             initWithString: &*item_ns_string
+                        ];
+                        
+                        let calendar_color = NSColor::colorWithSRGBRed_green_blue_alpha(
+                            event.calendar_color.0,
+                            event.calendar_color.1,
+                            event.calendar_color.2,
+                            1.0,
+                        );
+                        let indicator_range = NSRange::new(2, 1);
+                        let _: () = msg_send![
+                            &*attr_string,
+                            addAttribute: NSForegroundColorAttributeName,
+                            value: &**calendar_color,
+                            range: indicator_range
                         ];
                         
                         let is_current_or_next = current_or_next
@@ -175,7 +190,7 @@ pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &A
                         if !is_all_day {
                             let start_time_len = format_time(&event.start).chars().count();
                             let secondary_color = NSColor::secondaryLabelColor();
-                            let dash_and_end_start = 2 + start_time_len + 1;
+                            let dash_and_end_start = 4 + start_time_len + 1;
                             let end_time_with_dash_len = 2 + format_time(&event.end).chars().count();
                             let end_time_range = NSRange::new(dash_and_end_start, end_time_with_dash_len);
                             
@@ -202,7 +217,7 @@ pub fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, dismissed: &A
                             if !is_all_day {
                                 let start_time_len = format_time(&event.start).chars().count();
                                 let tertiary_color = NSColor::tertiaryLabelColor();
-                                let dash_and_end_start = 2 + start_time_len + 1;
+                                let dash_and_end_start = 4 + start_time_len + 1;
                                 let end_time_with_dash_len = 2 + format_time(&event.end).chars().count();
                                 let end_time_range = NSRange::new(dash_and_end_start, end_time_with_dash_len);
                                 

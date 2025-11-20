@@ -13,6 +13,7 @@ pub struct EventInfo {
     pub occurrence_key: String,
     pub has_recurrence: bool,
     pub location: Option<String>,
+    pub calendar_color: (f64, f64, f64),
 }
 
 pub fn request_calendar_access(store: &EKEventStore) -> bool {
@@ -91,6 +92,18 @@ pub fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
 
             let location_str = location.map(|loc| loc.to_string());
 
+            let calendar = event.calendar();
+            let calendar_color = if let Some(cal) = calendar {
+                let color = cal.color();
+                (
+                    color.redComponent(),
+                    color.greenComponent(),
+                    color.blueComponent(),
+                )
+            } else {
+                (0.5, 0.5, 0.5)
+            };
+
             event_list.push(EventInfo {
                 title: title.to_string(),
                 start: start_dt,
@@ -99,6 +112,7 @@ pub fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
                 occurrence_key,
                 has_recurrence,
                 location: location_str,
+                calendar_color,
             });
         }
 
@@ -136,6 +150,20 @@ pub fn get_service_name_from_url(url: &str) -> String {
         "Teams".to_string()
     } else {
         "Video Call".to_string()
+    }
+}
+
+pub fn get_service_icon_from_url(url: &str) -> &'static str {
+    if url.contains("slack.com") {
+        "💬"
+    } else if url.contains("zoom.us") {
+        "📹"
+    } else if url.contains("meet.google.com") || url.contains("meet.google") {
+        "📞"
+    } else if url.contains("teams.microsoft.com") || url.contains("teams.live.com") {
+        "👥"
+    } else {
+        "🎥"
     }
 }
 
