@@ -1,7 +1,6 @@
 use chrono;
 use objc2::rc::Retained;
-use objc2::runtime::AnyObject;
-use objc2::{declare_class, msg_send, msg_send_id, mutability, ClassType, DeclaredClass};
+use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
 use objc2_app_kit::{NSMenuItem, NSStatusItem, NSWorkspace};
 use objc2_event_kit::EKEventStore;
 use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSURL};
@@ -84,22 +83,19 @@ declare_class!(
                     let ns_string: *const NSString = Retained::as_ptr(&obj).cast();
                     let url_string = (*ns_string).to_string();
 
-                    if let Some(url) = NSURL::URLWithString(&NSString::from_str(&url_string)) {
+                    let final_url = if url_string.contains("slack") {
+                        if let Some(captures) = extract_slack_huddle_ids(&url_string) {
+                            format!("slack://join-huddle?team={}&id={}", captures.0, captures.1)
+                        } else {
+                            url_string
+                        }
+                    } else {
+                        url_string
+                    };
+
+                    if let Some(url) = NSURL::URLWithString(&NSString::from_str(&final_url)) {
                         let workspace = NSWorkspace::sharedWorkspace();
-
-                        // Create configuration to prefer opening in native apps
-                        let config: Retained<AnyObject> = msg_send_id![
-                            objc2::class!(NSWorkspaceOpenConfiguration),
-                            configuration
-                        ];
-
-                        // Open URL with configuration (no completion handler)
-                        let _: () = msg_send![
-                            &*workspace,
-                            openURL: &*url,
-                            configuration: &*config,
-                            completionHandler: Option::<&AnyObject>::None
-                        ];
+                        workspace.openURL(&url);
                     }
                 }
             }
@@ -148,6 +144,21 @@ declare_class!(
         }
     }
 );
+
+fn extract_slack_huddle_ids(url: &str) -> Option<(String, String)> {
+    if url.contains("/huddle/") {
+        let parts: Vec<&str> = url.split('/').collect();
+        if let Some(huddle_idx) = parts.iter().position(|&p| p == "huddle") {
+            if huddle_idx + 2 < parts.len() {
+                let team = parts[huddle_idx + 1].to_string();
+                let channel = parts[huddle_idx + 2].to_string();
+                return Some((team, channel));
+            }
+        }
+    }
+
+    None
+}
 
 impl MenuDelegate {
     pub fn new(
