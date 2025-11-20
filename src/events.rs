@@ -50,12 +50,11 @@ pub fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
         .and_local_timezone(Local)
         .unwrap();
 
-    let start_ns_date = unsafe {
-        objc2_foundation::NSDate::dateWithTimeIntervalSince1970(start_of_today.timestamp() as f64)
-    };
-    let end_ns_date = unsafe {
-        objc2_foundation::NSDate::dateWithTimeIntervalSince1970(end_of_four_days.timestamp() as f64)
-    };
+    let start_ns_date =
+        objc2_foundation::NSDate::dateWithTimeIntervalSince1970(start_of_today.timestamp() as f64);
+    let end_ns_date = objc2_foundation::NSDate::dateWithTimeIntervalSince1970(
+        end_of_four_days.timestamp() as f64,
+    );
 
     unsafe {
         let calendars = store.calendarsForEntityType(EKEntityType::Event);

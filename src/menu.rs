@@ -1,7 +1,7 @@
 use chrono::{Duration, Local};
+use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
-use objc2::{msg_send, msg_send_id, ClassType};
 use objc2_app_kit::{NSColor, NSFont, NSImage, NSMenu, NSMenuItem};
 use objc2_foundation::{ns_string, MainThreadMarker, NSRange, NSString};
 use std::collections::HashSet;
@@ -14,10 +14,20 @@ use crate::events::{
 };
 
 fn load_icon(name: &str) -> Option<Retained<NSImage>> {
+    let icon_data: &[u8] = match name {
+        "calendar" => include_bytes!("../assets/icons/calendar.svg"),
+        "circle-x" => include_bytes!("../assets/icons/circle-x.svg"),
+        "google" => include_bytes!("../assets/icons/google.svg"),
+        "slack" => include_bytes!("../assets/icons/slack.svg"),
+        "teams" => include_bytes!("../assets/icons/teams.svg"),
+        "video" => include_bytes!("../assets/icons/video.svg"),
+        _ => return None,
+    };
+
     unsafe {
-        let path = format!("assets/icons/{}.svg", name);
-        let path_ns = NSString::from_str(&path);
-        if let Some(image) = NSImage::initWithContentsOfFile(NSImage::alloc(), &path_ns) {
+        let data = objc2_foundation::NSData::with_bytes(icon_data);
+        if let Some(image) = NSImage::initWithData(msg_send![objc2::class!(NSImage), alloc], &data)
+        {
             let size = objc2_foundation::NSSize::new(16.0, 16.0);
             image.setSize(size);
             image.setTemplate(true);
@@ -31,7 +41,7 @@ fn load_icon(name: &str) -> Option<Retained<NSImage>> {
 fn load_colored_icon(_name: &str, color: &NSColor) -> Option<Retained<NSImage>> {
     unsafe {
         let size = objc2_foundation::NSSize::new(16.0, 16.0);
-        let image = NSImage::initWithSize(NSImage::alloc(), size);
+        let image = NSImage::initWithSize(msg_send![objc2::class!(NSImage), alloc], size);
 
         let _: () = msg_send![&*image, lockFocus];
 
@@ -180,8 +190,8 @@ pub fn build_menu(
                     let header_text = format!("{}, {}", day_name, date_str);
                     let header_ns_string = NSString::from_str(&header_text);
 
-                    let attr_string: Retained<AnyObject> = msg_send_id![
-                        msg_send_id![objc2::class!(NSMutableAttributedString), alloc],
+                    let attr_string: Retained<AnyObject> = msg_send![
+                        msg_send![objc2::class!(NSMutableAttributedString), alloc],
                         initWithString: &*header_ns_string
                     ];
 
@@ -221,8 +231,8 @@ pub fn build_menu(
                         let item_title = format!("{} {}", time_prefix, event.title);
                         let item_ns_string = NSString::from_str(&item_title);
 
-                        let attr_string: Retained<AnyObject> = msg_send_id![
-                            msg_send_id![objc2::class!(NSMutableAttributedString), alloc],
+                        let attr_string: Retained<AnyObject> = msg_send![
+                            msg_send![objc2::class!(NSMutableAttributedString), alloc],
                             initWithString: &*item_ns_string
                         ];
 
