@@ -356,15 +356,32 @@ fn build_menu(events: Vec<EventInfo>, delegate: &MenuDelegate, mtm: MainThreadMa
                         
                         let is_past = event.end < now;
                         if is_past {
-                            let tertiary_color = NSColor::tertiaryLabelColor();
+                            // Apply secondary color to the entire text for past events
+                            let secondary_color = NSColor::secondaryLabelColor();
                             let full_range = NSRange::new(0, item_ns_string.length());
                             
                             let _: () = msg_send![
                                 &*attr_string,
                                 addAttribute: NSForegroundColorAttributeName,
-                                value: &**tertiary_color,
+                                value: &**secondary_color,
                                 range: full_range
                             ];
+                            
+                            // Then apply tertiary (darker) color to the "- XX:XX" part if not all-day
+                            if !is_all_day {
+                                let start_time_len = format_time(&event.start).chars().count();
+                                let tertiary_color = NSColor::tertiaryLabelColor();
+                                let dash_and_end_start = 2 + start_time_len + 1;
+                                let end_time_with_dash_len = 2 + format_time(&event.end).chars().count();
+                                let end_time_range = NSRange::new(dash_and_end_start, end_time_with_dash_len);
+                                
+                                let _: () = msg_send![
+                                    &*attr_string,
+                                    addAttribute: NSForegroundColorAttributeName,
+                                    value: &**tertiary_color,
+                                    range: end_time_range
+                                ];
+                            }
                         }
                         
                         let item = NSMenuItem::initWithTitle_action_keyEquivalent(
