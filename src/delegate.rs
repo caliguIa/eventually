@@ -48,6 +48,30 @@ define_class!(
             status_item.setMenu(Some(&menu));
         }
 
+        #[unsafe(method(didWakeNotification:))]
+        fn did_wake_notification(&self, _notification: &NSNotification) {
+            let events = fetch_events(&self.ivars().event_store);
+
+            let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
+            let title = get_status_bar_title(&events, &dismissed_set);
+            drop(dismissed_set);
+
+            let menu = build_menu(
+                events,
+                self,
+                &self.ivars().dismissed_events,
+                self.ivars().mtm,
+            );
+
+            let status_item = &self.ivars().status_item;
+
+            if let Some(button) = status_item.button(self.ivars().mtm) {
+                button.setTitle(&NSString::from_str(&title));
+            }
+
+            status_item.setMenu(Some(&menu));
+        }
+
         #[unsafe(method(openEvent:))]
         fn open_event(&self, sender: &NSMenuItem) {
             unsafe {
