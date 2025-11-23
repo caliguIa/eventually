@@ -69,16 +69,11 @@ impl<'a> EventStatus<'a> {
     }
 }
 
-pub fn request_calendar_access(store: &EKEventStore) -> bool {
-    use crate::ffi::event_kit;
-    event_kit::request_calendar_access(store)
-}
-
-pub fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
+pub fn fetch(store: &EKEventStore) -> Vec<EventInfo> {
     let (start_date, end_date) = date_range();
     let events = fetch_raw_events(store, &start_date, &end_date);
 
-    let mut event_list: Vec<EventInfo> = events.iter().map(|e| event_to_info(e)).collect();
+    let mut event_list: Vec<EventInfo> = events.iter().map(|e| parse_event(e)).collect();
 
     event_list.sort_by_key(|e| e.start);
     event_list
@@ -88,12 +83,12 @@ pub fn format_time(dt: &DateTime<Local>) -> String {
     format!("{:02}:{:02}", dt.hour(), dt.minute())
 }
 
-pub fn is_all_day_event(start: &DateTime<Local>, end: &DateTime<Local>) -> bool {
+pub fn is_all_day(start: &DateTime<Local>, end: &DateTime<Local>) -> bool {
     start.time().num_seconds_from_midnight() == 0
         && end.time().num_seconds_from_midnight() == END_OF_DAY_SECS
 }
 
-pub fn extract_url_from_location(location: Option<&str>) -> Option<&str> {
+pub fn extract_url(location: Option<&str>) -> Option<&str> {
     location.filter(|loc| loc.starts_with("http://") || loc.starts_with("https://"))
 }
 
@@ -109,7 +104,7 @@ pub fn get_service_info(url: &str) -> ServiceInfo {
         })
 }
 
-pub fn find_current_or_next_event<'a>(
+pub fn find_cur_or_next<'a>(
     events: &'a [EventInfo],
     dismissed: &HashSet<String>,
 ) -> Option<EventStatus<'a>> {
@@ -132,10 +127,10 @@ pub fn find_current_or_next_event<'a>(
     upcoming
 }
 
-pub fn get_status_bar_title(events: &[EventInfo], dismissed: &HashSet<String>) -> String {
+pub fn get_title(events: &[EventInfo], dismissed: &HashSet<String>) -> String {
     let now = Local::now();
 
-    match find_current_or_next_event(events, dismissed) {
+    match find_cur_or_next(events, dismissed) {
         Some(EventStatus::Current(e)) => {
             let remaining = e.end.signed_duration_since(now);
             format_event_title(&e.title, remaining, "{} • {} left")
@@ -199,7 +194,7 @@ fn fetch_raw_events(store: &EKEventStore, start: &NSDate, end: &NSDate) -> Vec<R
     event_kit::fetch_events(store, start, end)
 }
 
-fn event_to_info(event: &EKEvent) -> EventInfo {
+fn parse_event(event: &EKEvent) -> EventInfo {
     use crate::ffi::event_kit;
     let (start_date, end_date, event_id, title, location, calendar, has_recurrence) =
         event_kit::get_event_properties(event);

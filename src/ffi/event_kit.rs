@@ -22,11 +22,7 @@ pub fn request_calendar_access(store: &EKEventStore) -> bool {
     rx.recv().unwrap_or(false)
 }
 
-pub fn fetch_events(
-    store: &EKEventStore,
-    start: &NSDate,
-    end: &NSDate,
-) -> Vec<Retained<EKEvent>> {
+pub fn fetch_events(store: &EKEventStore, start: &NSDate, end: &NSDate) -> Vec<Retained<EKEvent>> {
     unsafe {
         let calendars = store.calendarsForEntityType(EKEntityType::Event);
         let predicate =

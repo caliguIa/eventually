@@ -14,7 +14,6 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use args::handle_args;
-use calendar::{fetch_events, get_status_bar_title, request_calendar_access};
 use delegate::MenuDelegate;
 use menu::build_menu;
 
@@ -22,7 +21,7 @@ use crate::event_observers::observe_system_notifs;
 
 fn main() {
     use crate::ffi::event_kit;
-    
+
     match handle_args() {
         Some(Ok(())) => return,
         Some(Err(e)) => {
@@ -44,12 +43,12 @@ fn main() {
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
 
     let event_store = event_kit::init_event_store(mtm);
-    if !request_calendar_access(&event_store) {
+    if !calendar::request_access(&event_store) {
         eprintln!("Calendar access denied. Please grant access in System Settings > Privacy & Security > Calendars");
         return;
     }
 
-    let events = fetch_events(&event_store);
+    let events = calendar::events::fetch(&event_store);
     let dismissed_events = Arc::new(Mutex::new(HashSet::new()));
 
     let status_item =
@@ -59,7 +58,7 @@ fn main() {
         let dismissed_set = dismissed_events
             .lock()
             .expect("dismissed_events lock should not be poisoned");
-        let title = get_status_bar_title(&events, &dismissed_set);
+        let title = calendar::events::get_title(&events, &dismissed_set);
         button.setTitle(&NSString::from_str(&title));
     } else {
         eprintln!("status is should have button");

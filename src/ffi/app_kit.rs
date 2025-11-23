@@ -56,7 +56,9 @@ pub fn init_menu_item(
     action: Option<objc2::runtime::Sel>,
     key_equivalent: &NSString,
 ) -> Retained<NSMenuItem> {
-    unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), title, action, key_equivalent) }
+    unsafe {
+        NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), title, action, key_equivalent)
+    }
 }
 
 pub fn init_attributed_string(string: &NSString) -> Retained<AnyObject> {
@@ -117,7 +119,10 @@ where
     }
 }
 
-pub fn set_menu_item_represented_object(item: &NSMenuItem, object: Option<&objc2::runtime::AnyObject>) {
+pub fn set_menu_item_represented_object(
+    item: &NSMenuItem,
+    object: Option<&objc2::runtime::AnyObject>,
+) {
     unsafe {
         item.setRepresentedObject(object);
     }
