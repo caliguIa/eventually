@@ -1,7 +1,5 @@
 use chrono::{Duration, Local};
-use objc2::msg_send;
 use objc2::rc::Retained;
-use objc2::runtime::AnyObject;
 use objc2_app_kit::{NSColor, NSFont, NSImage, NSMenu, NSMenuItem};
 use objc2_foundation::{ns_string, MainThreadMarker, NSRange, NSString};
 use std::collections::HashSet;
@@ -14,6 +12,8 @@ use crate::calendar::{
 };
 
 fn load_icon(name: &str) -> Option<Retained<NSImage>> {
+    use crate::ffi::app_kit;
+    
     let icon_data: &[u8] = match name {
         "calendar" => include_bytes!("../assets/icons/calendar.svg"),
         "circle-x" => include_bytes!("../assets/icons/circle-x.svg"),
@@ -24,45 +24,30 @@ fn load_icon(name: &str) -> Option<Retained<NSImage>> {
         _ => return None,
     };
 
-    unsafe {
-        let data = objc2_foundation::NSData::with_bytes(icon_data);
-        if let Some(image) = NSImage::initWithData(msg_send![objc2::class!(NSImage), alloc], &data)
-        {
-            let size = objc2_foundation::NSSize::new(16.0, 16.0);
-            image.setSize(size);
-            image.setTemplate(true);
-            Some(image)
-        } else {
-            None
-        }
-    }
+    let data = objc2_foundation::NSData::with_bytes(icon_data);
+    let image = app_kit::init_image_from_data(&data)?;
+    let size = objc2_foundation::NSSize::new(16.0, 16.0);
+    app_kit::set_image_properties(&image, size, true);
+    Some(image)
 }
 
 fn load_colored_icon(_name: &str, color: &NSColor) -> Option<Retained<NSImage>> {
-    unsafe {
-        let size = objc2_foundation::NSSize::new(16.0, 16.0);
-        let image = NSImage::initWithSize(msg_send![objc2::class!(NSImage), alloc], size);
+    use crate::ffi::app_kit;
+    
+    let size = objc2_foundation::NSSize::new(16.0, 16.0);
+    let image = app_kit::init_image_with_size(size);
 
-        let _: () = msg_send![&*image, lockFocus];
+    app_kit::lock_focus(&image);
+    
+    let circle_rect = objc2_foundation::NSRect::new(
+        objc2_foundation::NSPoint::new(4.0, 4.0),
+        objc2_foundation::NSSize::new(8.0, 8.0),
+    );
+    app_kit::draw_filled_circle(color, circle_rect);
+    
+    app_kit::unlock_focus(&image);
 
-        // Draw a filled circle with the calendar color
-        color.setFill();
-
-        let circle_rect = objc2_foundation::NSRect::new(
-            objc2_foundation::NSPoint::new(4.0, 4.0),
-            objc2_foundation::NSSize::new(8.0, 8.0),
-        );
-
-        let bezier_path: *mut AnyObject = msg_send![
-            objc2::class!(NSBezierPath),
-            bezierPathWithOvalInRect: circle_rect
-        ];
-        let _: () = msg_send![bezier_path, fill];
-
-        let _: () = msg_send![&*image, unlockFocus];
-
-        Some(image)
-    }
+    Some(image)
 }
 
 pub fn build_menu(
@@ -71,13 +56,12 @@ pub fn build_menu(
     dismissed: &Arc<Mutex<HashSet<String>>>,
     mtm: MainThreadMarker,
 ) -> Retained<NSMenu> {
-    unsafe {
-        extern "C" {
-            static NSForegroundColorAttributeName: &'static AnyObject;
-            static NSFontAttributeName: &'static AnyObject;
-        }
-
-        let menu = NSMenu::initWithTitle(mtm.alloc(), ns_string!(""));
+    use crate::ffi::app_kit;
+    
+    let foreground_color_attr = app_kit::get_foreground_color_attribute();
+    let font_attr = app_kit::get_font_attribute();
+    
+    let menu = app_kit::init_menu(mtm, ns_string!(""));
 
         let current_or_next = {
             let dismissed_set = dismissed.lock().unwrap();
@@ -91,8 +75,8 @@ pub fn build_menu(
                 let service_name = service_info.name;
                 let service_icon_name = service_info.icon;
                 let join_title = format!("Join {} Event", service_name);
-                let join_item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                    mtm.alloc(),
+                let join_item = app_kit::init_menu_item(
+                    mtm,
                     &NSString::from_str(&join_title),
                     Some(objc2::sel!(openURL:)),
                     ns_string!(""),
@@ -100,13 +84,13 @@ pub fn build_menu(
                 if let Some(icon) = load_icon(service_icon_name) {
                     join_item.setImage(Some(&icon));
                 }
-                join_item.setTarget(Some(delegate));
-                join_item.setRepresentedObject(Some(&*NSString::from_str(&url)));
+                app_kit::set_menu_item_target(&join_item, Some(delegate));
+                app_kit::set_menu_item_represented_object(&join_item, Some(&*NSString::from_str(&url)));
                 menu.addItem(&join_item);
             }
 
-            let calendar_item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                mtm.alloc(),
+            let calendar_item = app_kit::init_menu_item(
+                mtm,
                 ns_string!("Open in Calendar"),
                 Some(objc2::sel!(openEvent:)),
                 ns_string!(""),
@@ -114,13 +98,13 @@ pub fn build_menu(
             if let Some(icon) = load_icon("calendar") {
                 calendar_item.setImage(Some(&icon));
             }
-            calendar_item.setTarget(Some(delegate));
+            app_kit::set_menu_item_target(&calendar_item, Some(delegate));
             let open_data = format!("{}|||{}", event.event_id, event.has_recurrence);
-            calendar_item.setRepresentedObject(Some(&*NSString::from_str(&open_data)));
+            app_kit::set_menu_item_represented_object(&calendar_item, Some(&*NSString::from_str(&open_data)));
             menu.addItem(&calendar_item);
 
-            let dismiss_item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                mtm.alloc(),
+            let dismiss_item = app_kit::init_menu_item(
+                mtm,
                 ns_string!("Dismiss Event"),
                 Some(objc2::sel!(dismissEvent:)),
                 ns_string!(""),
@@ -128,16 +112,16 @@ pub fn build_menu(
             if let Some(icon) = load_icon("circle-x") {
                 dismiss_item.setImage(Some(&icon));
             }
-            dismiss_item.setTarget(Some(delegate));
-            dismiss_item.setRepresentedObject(Some(&*NSString::from_str(&event.occurrence_key)));
+            app_kit::set_menu_item_target(&dismiss_item, Some(delegate));
+            app_kit::set_menu_item_represented_object(&dismiss_item, Some(&*NSString::from_str(&event.occurrence_key)));
             menu.addItem(&dismiss_item);
 
             menu.addItem(&NSMenuItem::separatorItem(mtm));
         }
 
         if events.is_empty() {
-            let item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                mtm.alloc(),
+            let item = app_kit::init_menu_item(
+                mtm,
                 ns_string!("No events"),
                 None,
                 ns_string!(""),
@@ -192,29 +176,21 @@ pub fn build_menu(
                     let header_text = format!("{}, {}", day_name, date_str);
                     let header_ns_string = NSString::from_str(&header_text);
 
-                    let attr_string: Retained<AnyObject> = msg_send![
-                        msg_send![objc2::class!(NSMutableAttributedString), alloc],
-                        initWithString: &*header_ns_string
-                    ];
+                    let attr_string = app_kit::init_attributed_string(&header_ns_string);
 
                     let bold_font = NSFont::boldSystemFontOfSize(0.0);
                     let day_name_ns = NSString::from_str(day_name);
                     let day_name_range = NSRange::new(0, day_name_ns.length());
 
-                    let _: () = msg_send![
-                        &*attr_string,
-                        addAttribute: NSFontAttributeName,
-                        value: &**bold_font,
-                        range: day_name_range
-                    ];
+                    app_kit::add_attribute(&attr_string, font_attr, &**bold_font, day_name_range);
 
-                    let header_item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                        mtm.alloc(),
+                    let header_item = app_kit::init_menu_item(
+                        mtm,
                         ns_string!(""),
                         None,
                         ns_string!(""),
                     );
-                    let _: () = msg_send![&*header_item, setAttributedTitle: &*attr_string];
+                    app_kit::set_attributed_title(&header_item, &attr_string);
                     header_item.setEnabled(false);
                     menu.addItem(&header_item);
 
@@ -233,10 +209,7 @@ pub fn build_menu(
                         let item_title = format!("{} {}", time_prefix, event.title);
                         let item_ns_string = NSString::from_str(&item_title);
 
-                        let attr_string: Retained<AnyObject> = msg_send![
-                            msg_send![objc2::class!(NSMutableAttributedString), alloc],
-                            initWithString: &*item_ns_string
-                        ];
+                        let attr_string = app_kit::init_attributed_string(&item_ns_string);
 
                         let is_current_or_next = current_or_next
                             .as_ref()
@@ -246,12 +219,7 @@ pub fn build_menu(
                         if is_current_or_next {
                             let bold_font = NSFont::boldSystemFontOfSize(0.0);
                             let full_range = NSRange::new(0, item_ns_string.length());
-                            let _: () = msg_send![
-                                &*attr_string,
-                                addAttribute: NSFontAttributeName,
-                                value: &**bold_font,
-                                range: full_range
-                            ];
+                            app_kit::add_attribute(&attr_string, font_attr, &**bold_font, full_range);
                         }
 
                         if !is_all_day {
@@ -263,12 +231,7 @@ pub fn build_menu(
                             let end_time_range =
                                 NSRange::new(dash_and_end_start, end_time_with_dash_len);
 
-                            let _: () = msg_send![
-                                &*attr_string,
-                                addAttribute: NSForegroundColorAttributeName,
-                                value: &**secondary_color,
-                                range: end_time_range
-                            ];
+                            app_kit::add_attribute(&attr_string, foreground_color_attr, &**secondary_color, end_time_range);
                         }
 
                         let is_past = event.end < now || is_dismissed;
@@ -276,12 +239,7 @@ pub fn build_menu(
                             let secondary_color = NSColor::secondaryLabelColor();
                             let full_range = NSRange::new(0, item_ns_string.length());
 
-                            let _: () = msg_send![
-                                &*attr_string,
-                                addAttribute: NSForegroundColorAttributeName,
-                                value: &**secondary_color,
-                                range: full_range
-                            ];
+                            app_kit::add_attribute(&attr_string, foreground_color_attr, &**secondary_color, full_range);
 
                             if !is_all_day {
                                 let start_time_len = format_time(&event.start).chars().count();
@@ -292,22 +250,17 @@ pub fn build_menu(
                                 let end_time_range =
                                     NSRange::new(dash_and_end_start, end_time_with_dash_len);
 
-                                let _: () = msg_send![
-                                    &*attr_string,
-                                    addAttribute: NSForegroundColorAttributeName,
-                                    value: &**tertiary_color,
-                                    range: end_time_range
-                                ];
+                                app_kit::add_attribute(&attr_string, foreground_color_attr, &**tertiary_color, end_time_range);
                             }
                         }
 
-                        let item = NSMenuItem::initWithTitle_action_keyEquivalent(
-                            mtm.alloc(),
+                        let item = app_kit::init_menu_item(
+                            mtm,
                             ns_string!(""),
                             Some(objc2::sel!(openEvent:)),
                             ns_string!(""),
                         );
-                        let _: () = msg_send![&*item, setAttributedTitle: &*attr_string];
+                        app_kit::set_attributed_title(&item, &attr_string);
 
                         let calendar_color = NSColor::colorWithSRGBRed_green_blue_alpha(
                             event.calendar_color.0,
@@ -319,9 +272,9 @@ pub fn build_menu(
                             item.setImage(Some(&circle_icon));
                         }
 
-                        item.setTarget(Some(delegate));
+                        app_kit::set_menu_item_target(&item, Some(delegate));
                         let open_data = format!("{}|||{}", event.event_id, event.has_recurrence);
-                        item.setRepresentedObject(Some(&*NSString::from_str(&open_data)));
+                        app_kit::set_menu_item_represented_object(&item, Some(&*NSString::from_str(&open_data)));
 
                         menu.addItem(&item);
                     }
@@ -331,8 +284,8 @@ pub fn build_menu(
             }
         }
 
-        let quit_item = NSMenuItem::initWithTitle_action_keyEquivalent(
-            mtm.alloc(),
+        let quit_item = app_kit::init_menu_item(
+            mtm,
             ns_string!("Quit"),
             Some(objc2::sel!(terminate:)),
             ns_string!("q"),
@@ -340,5 +293,4 @@ pub fn build_menu(
         menu.addItem(&quit_item);
 
         menu
-    }
 }

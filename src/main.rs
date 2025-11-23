@@ -21,6 +21,8 @@ use menu::build_menu;
 use crate::event_observers::observe_system_notifs;
 
 fn main() {
+    use crate::ffi::event_kit;
+    
     match handle_args() {
         Some(Ok(())) => return,
         Some(Err(e)) => {
@@ -41,7 +43,7 @@ fn main() {
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
 
-    let event_store = ffi::event_kit::init_event_store(mtm);
+    let event_store = event_kit::init_event_store(mtm);
     if !request_calendar_access(&event_store) {
         eprintln!("Calendar access denied. Please grant access in System Settings > Privacy & Security > Calendars");
         return;

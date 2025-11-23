@@ -7,14 +7,16 @@ pub fn observe_system_notifs(
     notification_center: Retained<NSNotificationCenter>,
     delegate: &Retained<MenuDelegate>,
 ) {
-    crate::ffi::foundation::add_observer(
+    use crate::ffi::foundation;
+    
+    foundation::add_observer(
         &notification_center,
         delegate,
         objc2::sel!(eventStoreChanged:),
         Some(ns_string!("EKEventStoreChangedNotification")),
         None,
     );
-    crate::ffi::foundation::add_observer(
+    foundation::add_observer(
         &notification_center,
         delegate,
         objc2::sel!(didWakeNotification:),

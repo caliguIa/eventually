@@ -70,7 +70,8 @@ impl<'a> EventStatus<'a> {
 }
 
 pub fn request_calendar_access(store: &EKEventStore) -> bool {
-    crate::ffi::event_kit::request_calendar_access(store)
+    use crate::ffi::event_kit;
+    event_kit::request_calendar_access(store)
 }
 
 pub fn fetch_events(store: &EKEventStore) -> Vec<EventInfo> {
@@ -194,12 +195,14 @@ fn date_range() -> (Retained<NSDate>, Retained<NSDate>) {
 }
 
 fn fetch_raw_events(store: &EKEventStore, start: &NSDate, end: &NSDate) -> Vec<Retained<EKEvent>> {
-    crate::ffi::event_kit::fetch_events(store, start, end)
+    use crate::ffi::event_kit;
+    event_kit::fetch_events(store, start, end)
 }
 
 fn event_to_info(event: &EKEvent) -> EventInfo {
+    use crate::ffi::event_kit;
     let (start_date, end_date, event_id, title, location, calendar, has_recurrence) =
-        crate::ffi::event_kit::get_event_properties(event);
+        event_kit::get_event_properties(event);
 
     let start_ts = start_date.timeIntervalSince1970();
     let end_ts = end_date.timeIntervalSince1970();
@@ -229,5 +232,6 @@ fn timestamp_to_local(ts: f64) -> DateTime<Local> {
 }
 
 fn extract_color(calendar: &EKCalendar) -> (f64, f64, f64) {
-    crate::ffi::event_kit::get_calendar_color(calendar)
+    use crate::ffi::event_kit;
+    event_kit::get_calendar_color(calendar)
 }
