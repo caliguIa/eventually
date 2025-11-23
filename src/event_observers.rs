@@ -1,7 +1,7 @@
 use objc2::rc::Retained;
 use objc2_foundation::{ns_string, NSNotificationCenter};
 
-use crate::menu_delegate::MenuDelegate;
+use crate::menu::MenuDelegate;
 
 pub fn observe_system_notifs(
     notification_center: Retained<NSNotificationCenter>,

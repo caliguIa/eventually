@@ -1,6 +1,5 @@
 mod args;
 mod calendar;
-mod menu_delegate;
 mod event_observers;
 mod ffi;
 mod menu;
@@ -14,8 +13,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use args::handle_args;
-use menu_delegate::MenuDelegate;
-use menu::build_menu;
+use menu::{build_menu, MenuDelegate};
 
 use crate::event_observers::observe_system_notifs;
 
