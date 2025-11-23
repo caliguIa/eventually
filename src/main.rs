@@ -1,24 +1,24 @@
 mod args;
+mod calendar;
 mod delegate;
-mod events;
+mod event_observers;
+mod ffi;
 mod menu;
-mod observers;
 mod service;
 
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSStatusBar, NSVariableStatusItemLength,
 };
-use objc2_event_kit::EKEventStore;
 use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use args::handle_args;
+use calendar::{fetch_events, get_status_bar_title, request_calendar_access};
 use delegate::MenuDelegate;
-use events::{fetch_events, get_status_bar_title, request_calendar_access};
 use menu::build_menu;
 
-use crate::observers::observe_system_notifs;
+use crate::event_observers::observe_system_notifs;
 
 fn main() {
     match handle_args() {
@@ -41,7 +41,7 @@ fn main() {
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
 
-    let event_store = unsafe { EKEventStore::init(mtm.alloc::<EKEventStore>()) };
+    let event_store = ffi::event_kit::init_event_store(mtm);
     if !request_calendar_access(&event_store) {
         eprintln!("Calendar access denied. Please grant access in System Settings > Privacy & Security > Calendars");
         return;

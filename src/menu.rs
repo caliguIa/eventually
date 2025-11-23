@@ -8,9 +8,9 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::delegate::MenuDelegate;
-use crate::events::{
-    extract_url_from_location, find_current_or_next_event, format_time, get_service_icon_from_url,
-    get_service_name_from_url, is_all_day_event, EventInfo,
+use crate::calendar::{
+    extract_url_from_location, find_current_or_next_event, format_time, get_service_info, 
+    is_all_day_event, EventInfo,
 };
 
 fn load_icon(name: &str) -> Option<Retained<NSImage>> {
@@ -84,10 +84,12 @@ pub fn build_menu(
             find_current_or_next_event(&events, &dismissed_set)
         };
 
-        if let Some(event) = current_or_next {
-            if let Some(url) = extract_url_from_location(&event.location) {
-                let service_name = get_service_name_from_url(&url);
-                let service_icon_name = get_service_icon_from_url(&url);
+        if let Some(ref event_status) = current_or_next {
+            let event = event_status.event();
+            if let Some(url) = extract_url_from_location(event.location.as_deref()) {
+                let service_info = get_service_info(&url);
+                let service_name = service_info.name;
+                let service_icon_name = service_info.icon;
                 let join_title = format!("Join {} Event", service_name);
                 let join_item = NSMenuItem::initWithTitle_action_keyEquivalent(
                     mtm.alloc(),
@@ -237,7 +239,8 @@ pub fn build_menu(
                         ];
 
                         let is_current_or_next = current_or_next
-                            .map(|e| e.occurrence_key == event.occurrence_key)
+                            .as_ref()
+                            .map(|status| status.event().occurrence_key == event.occurrence_key)
                             .unwrap_or(false);
 
                         if is_current_or_next {

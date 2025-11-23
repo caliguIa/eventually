@@ -7,7 +7,7 @@ use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSU
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::events::{fetch_events, get_status_bar_title};
+use crate::calendar::{fetch_events, get_status_bar_title};
 use crate::menu::build_menu;
 
 pub struct Ivars {

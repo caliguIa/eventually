@@ -1,0 +1,24 @@
+use objc2::rc::Retained;
+use objc2_foundation::{NSNotificationCenter, ns_string};
+
+use crate::delegate::MenuDelegate;
+
+pub fn observe_system_notifs(
+    notification_center: Retained<NSNotificationCenter>,
+    delegate: &Retained<MenuDelegate>,
+) {
+    crate::ffi::foundation::add_observer(
+        &notification_center,
+        delegate,
+        objc2::sel!(eventStoreChanged:),
+        Some(ns_string!("EKEventStoreChangedNotification")),
+        None,
+    );
+    crate::ffi::foundation::add_observer(
+        &notification_center,
+        delegate,
+        objc2::sel!(didWakeNotification:),
+        Some(ns_string!("NSWorkspaceDidWakeNotification")),
+        None,
+    );
+}
