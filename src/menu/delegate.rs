@@ -28,10 +28,10 @@ define_class!(
     impl MenuDelegate {
         #[unsafe(method(eventStoreChanged:))]
         fn event_store_changed(&self, _notification: &NSNotification) {
-            let events = calendar::events::fetch(&self.ivars().event_store);
+            let events = calendar::fetch(&self.ivars().event_store);
 
             let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-            let title = calendar::events::get_title(&events, &dismissed_set);
+            let title = calendar::get_title(&events, &dismissed_set);
             drop(dismissed_set);
 
             let menu = build_menu(
@@ -52,10 +52,10 @@ define_class!(
 
         #[unsafe(method(didWakeNotification:))]
         fn did_wake_notification(&self, _notification: &NSNotification) {
-            let events = calendar::events::fetch(&self.ivars().event_store);
+            let events = calendar::fetch(&self.ivars().event_store);
 
             let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-            let title = calendar::events::get_title(&events, &dismissed_set);
+            let title = calendar::get_title(&events, &dismissed_set);
             drop(dismissed_set);
 
             let menu = build_menu(
@@ -127,14 +127,14 @@ define_class!(
                     dismissed.insert(event_id_string.clone());
                 }
 
-                let events = calendar::events::fetch(&self.ivars().event_store);
+                let events = calendar::fetch(&self.ivars().event_store);
                 for e in &events {
                     if e.start.date_naive() == chrono::Local::now().date_naive() {
                     }
                 }
 
                 let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-                let title = calendar::events::get_title(&events, &dismissed_set);
+                let title = calendar::get_title(&events, &dismissed_set);
                 drop(dismissed_set);
 
                 let menu = build_menu(

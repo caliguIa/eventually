@@ -46,7 +46,7 @@ fn main() {
         return;
     }
 
-    let events = calendar::events::fetch(&event_store);
+    let events = calendar::fetch(&event_store);
     let dismissed_events = Arc::new(Mutex::new(HashSet::new()));
 
     let status_item =
@@ -56,7 +56,7 @@ fn main() {
         let dismissed_set = dismissed_events
             .lock()
             .expect("dismissed_events lock should not be poisoned");
-        let title = calendar::events::get_title(&events, &dismissed_set);
+        let title = calendar::get_title(&events, &dismissed_set);
         button.setTitle(&NSString::from_str(&title));
     } else {
         eprintln!("status is should have button");

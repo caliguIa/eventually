@@ -5,7 +5,7 @@ use objc2_foundation::{ns_string, MainThreadMarker, NSRange, NSString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::calendar::events::{
+use crate::calendar::{
     extract_url, find_cur_or_next, format_time, get_service_info, is_all_day, EventInfo,
     EventStatus,
 };
