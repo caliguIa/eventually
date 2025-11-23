@@ -2,8 +2,8 @@ mod args;
 mod calendar;
 mod event_observers;
 mod ffi;
+mod launchd;
 mod menu;
-mod service;
 
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSStatusBar, NSVariableStatusItemLength,
@@ -41,8 +41,9 @@ fn main() {
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
 
     let event_store = event_kit::init_event_store(mtm);
-    if !calendar::request_access(&event_store) {
-        eprintln!("Calendar access denied. Please grant access in System Settings > Privacy & Security > Calendars");
+    if let Err(e) = calendar::request_access(&event_store) {
+        eprintln!("Calendar access error: {}", e);
+        eprintln!("Please grant access in System Settings > Privacy & Security > Calendars");
         return;
     }
 

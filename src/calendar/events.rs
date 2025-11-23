@@ -10,7 +10,7 @@ const DAYS_TO_FETCH: u8 = 4;
 const DEFAULT_CALENDAR_COLOR: (f64, f64, f64) = (0.5, 0.5, 0.5);
 
 /// Calendar event information
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EventInfo {
     pub title: String,
     pub start: DateTime<Local>,

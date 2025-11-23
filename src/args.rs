@@ -1,7 +1,7 @@
 use std::env;
 use std::io::Result;
 
-use crate::service::{Service, ID};
+use crate::launchd::{Service, ID};
 
 pub fn handle_args() -> Option<Result<()>> {
     let args: Vec<String> = env::args().collect();
