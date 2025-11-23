@@ -1,6 +1,6 @@
 use chrono;
 use objc2::rc::Retained;
-use objc2::{define_class, msg_send, DeclaredClass};
+use objc2::{define_class, DeclaredClass};
 use objc2_app_kit::{NSMenuItem, NSStatusItem, NSWorkspace};
 use objc2_event_kit::EKEventStore;
 use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSURL};
@@ -8,6 +8,8 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::calendar;
+use crate::ffi::foundation::ns_menu_item_represented_object_to_string;
+use crate::init_objc_super;
 use crate::menu::build_menu;
 
 pub struct Ivars {
@@ -74,90 +76,81 @@ define_class!(
 
         #[unsafe(method(openEvent:))]
         fn open_event(&self, sender: &NSMenuItem) {
-            unsafe {
-                if let Some(obj) = sender.representedObject() {
-                    let ns_string: *const NSString = Retained::as_ptr(&obj).cast();
-                    let data = (*ns_string).to_string();
+            if let Some(obj) = sender.representedObject() {
+                let data = ns_menu_item_represented_object_to_string(&obj);
 
-                    let parts: Vec<&str> = data.split("|||").collect();
-                    let event_id = parts[0];
-                    let has_recurrence = parts.get(1).map(|s| *s == "true").unwrap_or(false);
+                let parts: Vec<&str> = data.split("|||").collect();
+                let event_id = parts[0];
+                let has_recurrence = parts.get(1).map(|s| *s == "true").unwrap_or(false);
 
-                    let url_string = if has_recurrence {
-                        "ical://".to_string()
-                    } else {
-                        format!("ical://ekevent/{}", event_id)
-                    };
+                let url_string = if has_recurrence {
+                    "ical://".to_string()
+                } else {
+                    format!("ical://ekevent/{}", event_id)
+                };
 
-                    if let Some(url) = NSURL::URLWithString(&NSString::from_str(&url_string)) {
-                        NSWorkspace::sharedWorkspace().openURL(&url);
-                    }
+                if let Some(url) = NSURL::URLWithString(&NSString::from_str(&url_string)) {
+                    NSWorkspace::sharedWorkspace().openURL(&url);
                 }
             }
         }
 
         #[unsafe(method(openURL:))]
         fn open_url(&self, sender: &NSMenuItem) {
-            unsafe {
-                if let Some(obj) = sender.representedObject() {
-                    let ns_string: *const NSString = Retained::as_ptr(&obj).cast();
-                    let url_string = (*ns_string).to_string();
+            if let Some(obj) = sender.representedObject() {
+                let url_string = ns_menu_item_represented_object_to_string(&obj);
 
-                    let final_url = if url_string.contains("slack") {
-                        if let Some(captures) = extract_slack_huddle_ids(&url_string) {
-                            format!("slack://join-huddle?team={}&id={}", captures.0, captures.1)
-                        } else {
-                            url_string
-                        }
+                let final_url = if url_string.contains("slack") {
+                    if let Some(captures) = extract_slack_huddle_ids(&url_string) {
+                        format!("slack://join-huddle?team={}&id={}", captures.0, captures.1)
                     } else {
                         url_string
-                    };
-
-                    if let Some(url) = NSURL::URLWithString(&NSString::from_str(&final_url)) {
-                        let workspace = NSWorkspace::sharedWorkspace();
-                        workspace.openURL(&url);
                     }
+                } else {
+                    url_string
+                };
+
+                if let Some(url) = NSURL::URLWithString(&NSString::from_str(&final_url)) {
+                    let workspace = NSWorkspace::sharedWorkspace();
+                    workspace.openURL(&url);
                 }
             }
         }
 
         #[unsafe(method(dismissEvent:))]
         fn dismiss_event(&self, sender: &NSMenuItem) {
-            unsafe {
-                if let Some(obj) = sender.representedObject() {
-                    let ns_string: *const NSString = Retained::as_ptr(&obj).cast();
-                    let event_id_string = (*ns_string).to_string();
+            if let Some(obj) = sender.representedObject() {
+                let event_id_string = ns_menu_item_represented_object_to_string(&obj);
 
 
-                    if let Ok(mut dismissed) = self.ivars().dismissed_events.lock() {
-                        dismissed.insert(event_id_string.clone());
-                    }
-
-                    let events = calendar::events::fetch(&self.ivars().event_store);
-                    for e in &events {
-                        if e.start.date_naive() == chrono::Local::now().date_naive() {
-                        }
-                    }
-
-                    let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-                    let title = calendar::events::get_title(&events, &dismissed_set);
-                    drop(dismissed_set);
-
-                    let menu = build_menu(
-                        events,
-                        self,
-                        &self.ivars().dismissed_events,
-                        self.ivars().mtm,
-                    );
-
-                    let status_item = &self.ivars().status_item;
-
-                    if let Some(button) = status_item.button(self.ivars().mtm) {
-                        button.setTitle(&NSString::from_str(&title));
-                    }
-
-                    status_item.setMenu(Some(&menu));
+                if let Ok(mut dismissed) = self.ivars().dismissed_events.lock() {
+                    dismissed.insert(event_id_string.clone());
                 }
+
+                let events = calendar::events::fetch(&self.ivars().event_store);
+                for e in &events {
+                    if e.start.date_naive() == chrono::Local::now().date_naive() {
+                    }
+                }
+
+                let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
+                let title = calendar::events::get_title(&events, &dismissed_set);
+                drop(dismissed_set);
+
+                let menu = build_menu(
+                    events,
+                    self,
+                    &self.ivars().dismissed_events,
+                    self.ivars().mtm,
+                );
+
+                let status_item = &self.ivars().status_item;
+
+                if let Some(button) = status_item.button(self.ivars().mtm) {
+                    button.setTitle(&NSString::from_str(&title));
+                }
+
+                status_item.setMenu(Some(&menu));
             }
         }
     }
@@ -192,6 +185,6 @@ impl MenuDelegate {
             event_store,
             status_item,
         });
-        unsafe { msg_send![super(this), init] }
+        init_objc_super!(this)
     }
 }

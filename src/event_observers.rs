@@ -1,14 +1,14 @@
 use objc2::rc::Retained;
-use objc2_foundation::{NSNotificationCenter, ns_string};
+use objc2_foundation::{ns_string, NSNotificationCenter};
 
-use crate::delegate::MenuDelegate;
+use crate::menu_delegate::MenuDelegate;
 
 pub fn observe_system_notifs(
     notification_center: Retained<NSNotificationCenter>,
     delegate: &Retained<MenuDelegate>,
 ) {
     use crate::ffi::foundation;
-    
+
     foundation::add_observer(
         &notification_center,
         delegate,

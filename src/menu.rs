@@ -9,7 +9,7 @@ use crate::calendar::events::{
     extract_url, find_cur_or_next, format_time, get_service_info, is_all_day, EventInfo,
     EventStatus,
 };
-use crate::delegate::MenuDelegate;
+use crate::menu_delegate::MenuDelegate;
 
 fn load_icon(name: &str) -> Option<Retained<NSImage>> {
     use crate::ffi::app_kit;
