@@ -23,15 +23,32 @@ pub fn init_image_with_size(size: NSSize) -> Retained<NSImage> {
     }
 }
 
-pub fn lock_focus(image: &NSImage) {
+fn lock_focus(image: &NSImage) {
     unsafe {
         let _: () = msg_send![&*image, lockFocus];
     }
 }
 
-pub fn unlock_focus(image: &NSImage) {
+fn unlock_focus(image: &NSImage) {
     unsafe {
         let _: () = msg_send![&*image, unlockFocus];
+    }
+}
+
+pub struct FocusGuard<'a> {
+    image: &'a NSImage,
+}
+
+impl<'a> FocusGuard<'a> {
+    pub fn new(image: &'a NSImage) -> Self {
+        lock_focus(image);
+        Self { image }
+    }
+}
+
+impl Drop for FocusGuard<'_> {
+    fn drop(&mut self) {
+        unlock_focus(self.image);
     }
 }
 

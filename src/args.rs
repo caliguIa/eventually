@@ -1,48 +1,60 @@
-use std::env;
+use clap::{Parser, Subcommand};
 use std::io::Result;
 
 use crate::launchd::{Service, ID};
 
-pub fn handle_args() -> Option<Result<()>> {
-    let args: Vec<String> = env::args().collect();
+#[derive(Parser)]
+#[command(name = "eventually")]
+#[command(about = "macOS menu bar calendar app", long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
 
-    if args.len() <= 1 {
-        return None;
-    }
+#[derive(Subcommand)]
+pub enum Command {
+    /// Manage launchd service
+    Service {
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+}
 
-    match args[1].as_str() {
-        "service" => {
-            if args.len() < 3 {
-                eprintln!("Usage: eventually service <install|uninstall|start|stop|restart>");
-                std::process::exit(1);
-            }
+#[derive(Subcommand)]
+pub enum ServiceAction {
+    /// Install the launchd service
+    Install,
+    /// Uninstall the launchd service
+    Uninstall,
+    /// Start the service
+    Start,
+    /// Stop the service
+    Stop,
+    /// Restart the service
+    Restart,
+}
 
-            let service = match Service::try_new(ID) {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Failed to initialize service: {e}");
-                    std::process::exit(1);
-                }
-            };
-
-            let result = match args[2].as_str() {
-                "install" => service.install(),
-                "uninstall" => service.uninstall(),
-                "start" => service.start(),
-                "stop" => service.stop(),
-                "restart" => service.restart(),
-                cmd => {
-                    eprintln!("Unknown service command: {cmd}");
-                    eprintln!("Available commands: install, uninstall, start, stop, restart");
-                    std::process::exit(1);
-                }
-            };
-
-            Some(result)
+impl ServiceAction {
+    pub fn execute(self) -> Result<()> {
+        let service = Service::try_new(ID)?;
+        
+        match self {
+            Self::Install => service.install(),
+            Self::Uninstall => service.uninstall(),
+            Self::Start => service.start(),
+            Self::Stop => service.stop(),
+            Self::Restart => service.restart(),
         }
-        _ => {
-            eprintln!("Unknown command: {}", args[1]);
-            std::process::exit(1);
+    }
+}
+
+impl Cli {
+    pub fn parse_and_execute() -> Option<Result<()>> {
+        let cli = Self::parse();
+        
+        match cli.command {
+            Some(Command::Service { action }) => Some(action.execute()),
+            None => None,
         }
     }
 }

@@ -23,10 +23,11 @@ pub fn request_calendar_access(store: &EKEventStore) -> bool {
         ) as *const _ as *mut _);
     }
 
-    rx.recv_timeout(Duration::from_secs(30)).unwrap_or_else(|e| {
-        eprintln!("Calendar access request timed out or failed: {}", e);
-        false
-    })
+    rx.recv_timeout(Duration::from_secs(30))
+        .unwrap_or_else(|e| {
+            eprintln!("Calendar access request timed out or failed: {}", e);
+            false
+        })
 }
 
 pub fn fetch_events(store: &EKEventStore, start: &NSDate, end: &NSDate) -> Vec<Retained<EKEvent>> {

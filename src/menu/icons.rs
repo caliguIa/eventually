@@ -32,15 +32,14 @@ impl Icon {
         let size = objc2_foundation::NSSize::new(16.0, 16.0);
         let image = app_kit::init_image_with_size(size);
 
-        app_kit::lock_focus(&image);
-
-        let circle_rect = objc2_foundation::NSRect::new(
-            objc2_foundation::NSPoint::new(4.0, 4.0),
-            objc2_foundation::NSSize::new(8.0, 8.0),
-        );
-        app_kit::draw_filled_circle(color, circle_rect);
-
-        app_kit::unlock_focus(&image);
+        {
+            let _guard = app_kit::FocusGuard::new(&image);
+            let circle_rect = objc2_foundation::NSRect::new(
+                objc2_foundation::NSPoint::new(4.0, 4.0),
+                objc2_foundation::NSSize::new(8.0, 8.0),
+            );
+            app_kit::draw_filled_circle(color, circle_rect);
+        }
 
         Some(image)
     }

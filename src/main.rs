@@ -5,21 +5,21 @@ mod ffi;
 mod launchd;
 mod menu;
 
-use crate::event_observers::observe_system_notifs;
-use args::handle_args;
+use args::Cli;
 use calendar::EventCollection;
+use event_observers::SystemNotificationObserver;
 use menu::{MenuBuilder, MenuDelegate};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSStatusBar, NSVariableStatusItemLength,
 };
-use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
+use objc2_foundation::{MainThreadMarker, NSString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 fn main() {
     use crate::ffi::event_kit;
 
-    match handle_args() {
+    match Cli::parse_and_execute() {
         Some(Ok(())) => return,
         Some(Err(e)) => {
             eprintln!("Command failed: {e}");
@@ -77,8 +77,7 @@ fn main() {
     let menu = MenuBuilder::new(events.into_vec(), &delegate, &dismissed_events, mtm).build();
     status_item.setMenu(Some(&menu));
 
-    let notification_center = NSNotificationCenter::defaultCenter();
-    observe_system_notifs(notification_center, &delegate);
+    SystemNotificationObserver::new(delegate).register();
 
     app.run();
 }

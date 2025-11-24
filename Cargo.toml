@@ -56,3 +56,4 @@ objc2-event-kit = { version = "0.3", features = [
 ] }
 block2 = "0.6"
 chrono = "0.4"
+clap = { version = "4.5.53", features = ["derive"] }

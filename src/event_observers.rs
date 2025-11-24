@@ -1,26 +1,55 @@
 use objc2::rc::Retained;
-use objc2_foundation::{ns_string, NSNotificationCenter};
+use objc2_foundation::{ns_string, NSNotificationCenter, NSString};
 
+use crate::ffi::foundation;
 use crate::menu::MenuDelegate;
 
-pub fn observe_system_notifs(
-    notification_center: Retained<NSNotificationCenter>,
-    delegate: &Retained<MenuDelegate>,
-) {
-    use crate::ffi::foundation;
+#[derive(Debug, Clone, Copy)]
+pub enum SystemNotification {
+    EventStoreChanged,
+    WorkspaceDidWake,
+}
 
-    foundation::add_observer(
-        &notification_center,
-        delegate,
-        objc2::sel!(eventStoreChanged:),
-        Some(ns_string!("EKEventStoreChangedNotification")),
-        None,
-    );
-    foundation::add_observer(
-        &notification_center,
-        delegate,
-        objc2::sel!(didWakeNotification:),
-        Some(ns_string!("NSWorkspaceDidWakeNotification")),
-        None,
-    );
+impl SystemNotification {
+    fn name(&self) -> &NSString {
+        match self {
+            Self::EventStoreChanged => ns_string!("EKEventStoreChangedNotification"),
+            Self::WorkspaceDidWake => ns_string!("NSWorkspaceDidWakeNotification"),
+        }
+    }
+
+    fn selector(&self) -> objc2::runtime::Sel {
+        match self {
+            Self::EventStoreChanged => objc2::sel!(eventStoreChanged:),
+            Self::WorkspaceDidWake => objc2::sel!(didWakeNotification:),
+        }
+    }
+
+    fn add(&self, center: &NSNotificationCenter, delegate: &Retained<MenuDelegate>) {
+        foundation::add_observer(center, delegate, self.selector(), Some(self.name()), None);
+    }
+}
+
+pub struct SystemNotificationObserver {
+    notification_center: Retained<NSNotificationCenter>,
+    delegate: Retained<MenuDelegate>,
+}
+
+impl SystemNotificationObserver {
+    pub fn new(delegate: Retained<MenuDelegate>) -> Self {
+        Self {
+            notification_center: NSNotificationCenter::defaultCenter(),
+            delegate,
+        }
+    }
+
+    pub fn register(self) -> Self {
+        self.add_notification(SystemNotification::EventStoreChanged);
+        self.add_notification(SystemNotification::WorkspaceDidWake);
+        self
+    }
+
+    fn add_notification(&self, notification: SystemNotification) {
+        notification.add(&self.notification_center, &self.delegate);
+    }
 }

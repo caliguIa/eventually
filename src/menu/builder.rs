@@ -5,7 +5,9 @@ use objc2_foundation::{ns_string, MainThreadMarker, NSRange, NSString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::calendar::{extract_url, format_time, is_all_day, EventInfo, EventStatus, Icon, ServiceInfo};
+use crate::calendar::{
+    extract_url, format_time, is_all_day, EventInfo, EventStatus, Icon, ServiceInfo,
+};
 use crate::ffi::app_kit;
 
 use super::delegate::MenuDelegate;
@@ -35,7 +37,7 @@ impl<'a> MenuBuilder<'a> {
 
     pub fn build(self) -> Retained<NSMenu> {
         let menu = app_kit::init_menu(self.mtm, ns_string!(""));
-        
+
         let collection = crate::calendar::EventCollection::from(self.events.clone());
         let current_or_next: Option<EventStatus> = match self.dismissed.lock() {
             Ok(dismissed_set) => collection.find_cur_or_next(&dismissed_set),
