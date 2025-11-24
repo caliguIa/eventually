@@ -1,6 +1,16 @@
 use std::borrow::Cow;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Icon {
+    Calendar,
+    CircleX,
+    Google,
+    Slack,
+    Teams,
+    Video,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ServiceInfo {
     Slack,
     Zoom,
@@ -34,13 +44,13 @@ impl ServiceInfo {
         }
     }
 
-    pub fn icon(&self) -> &'static str {
+    pub fn icon(&self) -> Icon {
         match self {
-            Self::Slack => "slack",
-            Self::Zoom => "zoom",
-            Self::GoogleMeet => "google",
-            Self::MicrosoftTeams => "teams",
-            Self::Generic => "video",
+            Self::Slack => Icon::Slack,
+            Self::Zoom => Icon::Video, // Using generic video icon
+            Self::GoogleMeet => Icon::Google,
+            Self::MicrosoftTeams => Icon::Teams,
+            Self::Generic => Icon::Video,
         }
     }
 }
@@ -139,9 +149,9 @@ mod tests {
 
     #[test]
     fn test_service_icon() {
-        assert_eq!(ServiceInfo::Slack.icon(), "slack");
-        assert_eq!(ServiceInfo::Zoom.icon(), "zoom");
-        assert_eq!(ServiceInfo::Generic.icon(), "video");
+        assert_eq!(ServiceInfo::Slack.icon(), Icon::Slack);
+        assert_eq!(ServiceInfo::Zoom.icon(), Icon::Video);
+        assert_eq!(ServiceInfo::Generic.icon(), Icon::Video);
     }
 
     #[test]

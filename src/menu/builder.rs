@@ -5,12 +5,11 @@ use objc2_foundation::{ns_string, MainThreadMarker, NSRange, NSString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::calendar::{extract_url, format_time, is_all_day, EventInfo, EventStatus, ServiceInfo};
+use crate::calendar::{extract_url, format_time, is_all_day, EventInfo, EventStatus, Icon, ServiceInfo};
 use crate::ffi::app_kit;
 
 use super::delegate::MenuDelegate;
 use super::formatting;
-use super::icons;
 
 pub struct MenuBuilder<'a> {
     events: Vec<EventInfo>,
@@ -79,7 +78,7 @@ impl<'a> MenuBuilder<'a> {
             Some(objc2::sel!(openURL:)),
             ns_string!(""),
         );
-        if let Some(icon) = icons::load_icon(service_info.icon()) {
+        if let Some(icon) = service_info.icon().load() {
             join_item.setImage(Some(&icon));
         }
         app_kit::set_menu_item_target(&join_item, Some(self.delegate));
@@ -94,7 +93,7 @@ impl<'a> MenuBuilder<'a> {
             Some(objc2::sel!(openEvent:)),
             ns_string!(""),
         );
-        if let Some(icon) = icons::load_icon("calendar") {
+        if let Some(icon) = Icon::Calendar.load() {
             calendar_item.setImage(Some(&icon));
         }
         app_kit::set_menu_item_target(&calendar_item, Some(self.delegate));
@@ -113,7 +112,7 @@ impl<'a> MenuBuilder<'a> {
             Some(objc2::sel!(dismissEvent:)),
             ns_string!(""),
         );
-        if let Some(icon) = icons::load_icon("circle-x") {
+        if let Some(icon) = Icon::CircleX.load() {
             dismiss_item.setImage(Some(&icon));
         }
         app_kit::set_menu_item_target(&dismiss_item, Some(self.delegate));
@@ -275,7 +274,7 @@ impl<'a> MenuBuilder<'a> {
             event.calendar_color.2,
             1.0,
         );
-        if let Some(circle_icon) = icons::load_colored_icon("circle", &calendar_color) {
+        if let Some(circle_icon) = Icon::load_colored(&calendar_color) {
             item.setImage(Some(&circle_icon));
         }
 
