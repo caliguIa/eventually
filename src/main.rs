@@ -77,7 +77,7 @@ fn main() {
     let menu = MenuBuilder::new(events.into_vec(), &delegate, &dismissed_events, mtm).build();
     status_item.setMenu(Some(&menu));
 
-    SystemNotificationObserver::new(delegate).register();
+    SystemNotificationObserver::new(&delegate).register();
 
     app.run();
 }

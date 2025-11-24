@@ -30,13 +30,13 @@ impl SystemNotification {
     }
 }
 
-pub struct SystemNotificationObserver {
+pub struct SystemNotificationObserver<'a> {
     notification_center: Retained<NSNotificationCenter>,
-    delegate: Retained<MenuDelegate>,
+    delegate: &'a Retained<MenuDelegate>,
 }
 
-impl SystemNotificationObserver {
-    pub fn new(delegate: Retained<MenuDelegate>) -> Self {
+impl<'a> SystemNotificationObserver<'a> {
+    pub fn new(delegate: &'a Retained<MenuDelegate>) -> Self {
         Self {
             notification_center: NSNotificationCenter::defaultCenter(),
             delegate,
