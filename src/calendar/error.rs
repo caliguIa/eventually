@@ -1,11 +1,8 @@
 use std::fmt;
 
-/// Error types for calendar operations
 #[derive(Debug, Clone)]
 pub enum CalendarError {
-    /// User denied calendar access
     AccessDenied,
-    /// Event store is unavailable
     StoreUnavailable,
 }
 

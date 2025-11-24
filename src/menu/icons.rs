@@ -3,7 +3,6 @@ use objc2_app_kit::{NSColor, NSImage};
 
 use crate::ffi::app_kit;
 
-/// Loads an SVG icon from assets by name
 pub fn load_icon(name: &str) -> Option<Retained<NSImage>> {
     let icon_data: &[u8] = match name {
         "calendar" => include_bytes!("../../assets/icons/calendar.svg"),
@@ -14,7 +13,6 @@ pub fn load_icon(name: &str) -> Option<Retained<NSImage>> {
         "video" => include_bytes!("../../assets/icons/video.svg"),
         _ => return None,
     };
-
     let data = objc2_foundation::NSData::with_bytes(icon_data);
     let image = app_kit::init_image_from_data(&data)?;
     let size = objc2_foundation::NSSize::new(16.0, 16.0);
@@ -22,7 +20,6 @@ pub fn load_icon(name: &str) -> Option<Retained<NSImage>> {
     Some(image)
 }
 
-/// Creates a colored circular icon (used for calendar color indicators)
 pub fn load_colored_icon(_name: &str, color: &NSColor) -> Option<Retained<NSImage>> {
     let size = objc2_foundation::NSSize::new(16.0, 16.0);
     let image = app_kit::init_image_with_size(size);

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Local};
+use chrono::{DateTime, Duration, Local, Timelike};
 use objc2::rc::Retained;
 use objc2_event_kit::{EKCalendar, EKEvent, EKEventStore};
 use objc2_foundation::NSDate;
@@ -9,7 +9,6 @@ use super::formatting;
 const DAYS_TO_FETCH: u8 = 4;
 const DEFAULT_CALENDAR_COLOR: (f64, f64, f64) = (0.5, 0.5, 0.5);
 
-/// Calendar event information
 #[derive(Clone, Debug, PartialEq)]
 pub struct EventInfo {
     pub title: String,
@@ -22,7 +21,6 @@ pub struct EventInfo {
     pub calendar_color: (f64, f64, f64),
 }
 
-/// Status of an event (currently happening or upcoming)
 pub enum EventStatus<'a> {
     Current(&'a EventInfo),
     Upcoming(&'a EventInfo),
@@ -37,7 +35,6 @@ impl<'a> EventStatus<'a> {
     }
 }
 
-/// Fetches calendar events for the next few days
 pub fn fetch(store: &EKEventStore) -> Vec<EventInfo> {
     let (start_date, end_date) = date_range();
     let events = fetch_raw_events(store, &start_date, &end_date);
@@ -48,7 +45,6 @@ pub fn fetch(store: &EKEventStore) -> Vec<EventInfo> {
     event_list
 }
 
-/// Finds the current or next event for today (excluding dismissed events)
 pub fn find_cur_or_next<'a>(
     events: &'a [EventInfo],
     dismissed: &HashSet<String>,
@@ -72,7 +68,6 @@ pub fn find_cur_or_next<'a>(
     upcoming
 }
 
-/// Generates the status bar title based on current/upcoming events
 pub fn get_title(events: &[EventInfo], dismissed: &HashSet<String>) -> String {
     let now = Local::now();
 
@@ -95,12 +90,25 @@ fn date_range() -> (Retained<NSDate>, Retained<NSDate>) {
     let start = today
         .and_hms_opt(0, 0, 0)
         .and_then(|dt| dt.and_local_timezone(Local).single())
-        .expect("valid start of day");
+        .unwrap_or_else(|| {
+            Local::now()
+                .with_hour(0)
+                .and_then(|t| t.with_minute(0))
+                .and_then(|t| t.with_second(0))
+                .unwrap_or_else(|| Local::now())
+        });
 
     let end = (today + Duration::days(DAYS_TO_FETCH as i64))
         .and_hms_opt(23, 59, 59)
         .and_then(|dt| dt.and_local_timezone(Local).single())
-        .expect("valid end of day");
+        .unwrap_or_else(|| {
+            Local::now()
+                .with_hour(23)
+                .and_then(|t| t.with_minute(59))
+                .and_then(|t| t.with_second(59))
+                .unwrap_or_else(|| Local::now())
+                + Duration::days(DAYS_TO_FETCH as i64)
+        });
 
     (
         NSDate::dateWithTimeIntervalSince1970(start.timestamp() as f64),
@@ -108,11 +116,7 @@ fn date_range() -> (Retained<NSDate>, Retained<NSDate>) {
     )
 }
 
-fn fetch_raw_events(
-    store: &EKEventStore,
-    start: &NSDate,
-    end: &NSDate,
-) -> Vec<Retained<EKEvent>> {
+fn fetch_raw_events(store: &EKEventStore, start: &NSDate, end: &NSDate) -> Vec<Retained<EKEvent>> {
     use crate::ffi::event_kit;
     event_kit::fetch_events(store, start, end)
 }
@@ -145,11 +149,192 @@ fn parse_event(event: &EKEvent) -> EventInfo {
 
 fn timestamp_to_local(ts: f64) -> DateTime<Local> {
     DateTime::from_timestamp(ts as i64, 0)
-        .expect("valid timestamp")
+        .unwrap_or_else(|| DateTime::UNIX_EPOCH)
         .with_timezone(&Local)
 }
 
 fn extract_color(calendar: &EKCalendar) -> (f64, f64, f64) {
     use crate::ffi::event_kit;
     event_kit::get_calendar_color(calendar)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_event_status_current() {
+        let event = EventInfo {
+            title: "Test Event".to_string(),
+            start: Local::now(),
+            end: Local::now() + Duration::hours(1),
+            event_id: "test-id".to_string(),
+            occurrence_key: "test-key".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        };
+
+        let status = EventStatus::Current(&event);
+        assert_eq!(status.event().title, "Test Event");
+    }
+
+    #[test]
+    fn test_event_status_upcoming() {
+        let event = EventInfo {
+            title: "Test Event".to_string(),
+            start: Local::now() + Duration::hours(1),
+            end: Local::now() + Duration::hours(2),
+            event_id: "test-id".to_string(),
+            occurrence_key: "test-key".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        };
+
+        let status = EventStatus::Upcoming(&event);
+        assert_eq!(status.event().title, "Test Event");
+    }
+
+    #[test]
+    fn test_find_cur_or_next_current_event() {
+        let now = Local::now();
+        let events = vec![EventInfo {
+            title: "Current Event".to_string(),
+            start: now - Duration::minutes(30),
+            end: now + Duration::minutes(30),
+            event_id: "id1".to_string(),
+            occurrence_key: "key1".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        }];
+
+        let dismissed = HashSet::new();
+        let result = find_cur_or_next(&events, &dismissed);
+
+        assert!(result.is_some());
+        if let Some(EventStatus::Current(event)) = result {
+            assert_eq!(event.title, "Current Event");
+        } else {
+            panic!("Expected current event");
+        }
+    }
+
+    #[test]
+    fn test_find_cur_or_next_upcoming_event() {
+        let now = Local::now();
+        let events = vec![EventInfo {
+            title: "Upcoming Event".to_string(),
+            start: now + Duration::hours(1),
+            end: now + Duration::hours(2),
+            event_id: "id1".to_string(),
+            occurrence_key: "key1".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        }];
+
+        let dismissed = HashSet::new();
+        let result = find_cur_or_next(&events, &dismissed);
+
+        assert!(result.is_some());
+        if let Some(EventStatus::Upcoming(event)) = result {
+            assert_eq!(event.title, "Upcoming Event");
+        } else {
+            panic!("Expected upcoming event");
+        }
+    }
+
+    #[test]
+    fn test_find_cur_or_next_dismissed() {
+        let now = Local::now();
+        let events = vec![EventInfo {
+            title: "Dismissed Event".to_string(),
+            start: now + Duration::hours(1),
+            end: now + Duration::hours(2),
+            event_id: "id1".to_string(),
+            occurrence_key: "key1".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        }];
+
+        let mut dismissed = HashSet::new();
+        dismissed.insert("key1".to_string());
+        let result = find_cur_or_next(&events, &dismissed);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_cur_or_next_different_day() {
+        let tomorrow = Local::now() + Duration::days(1);
+        let events = vec![EventInfo {
+            title: "Tomorrow Event".to_string(),
+            start: tomorrow,
+            end: tomorrow + Duration::hours(1),
+            event_id: "id1".to_string(),
+            occurrence_key: "key1".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        }];
+
+        let dismissed = HashSet::new();
+        let result = find_cur_or_next(&events, &dismissed);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_title_current_event() {
+        let now = Local::now();
+        let events = vec![EventInfo {
+            title: "Current".to_string(),
+            start: now - Duration::minutes(30),
+            end: now + Duration::minutes(30),
+            event_id: "id1".to_string(),
+            occurrence_key: "key1".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        }];
+
+        let dismissed = HashSet::new();
+        let title = get_title(&events, &dismissed);
+
+        assert!(title.contains("Current"));
+        assert!(title.contains("left"));
+    }
+
+    #[test]
+    fn test_get_title_upcoming_event() {
+        let now = Local::now();
+        let events = vec![EventInfo {
+            title: "Upcoming".to_string(),
+            start: now + Duration::hours(1),
+            end: now + Duration::hours(2),
+            event_id: "id1".to_string(),
+            occurrence_key: "key1".to_string(),
+            has_recurrence: false,
+            location: None,
+            calendar_color: (0.5, 0.5, 0.5),
+        }];
+
+        let dismissed = HashSet::new();
+        let title = get_title(&events, &dismissed);
+
+        assert!(title.contains("Upcoming"));
+        assert!(title.contains("in"));
+    }
+
+    #[test]
+    fn test_get_title_no_events() {
+        let events = vec![];
+        let dismissed = HashSet::new();
+        let title = get_title(&events, &dismissed);
+
+        assert_eq!(title, "No more events today");
+    }
 }

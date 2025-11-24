@@ -30,9 +30,14 @@ define_class!(
         fn event_store_changed(&self, _notification: &NSNotification) {
             let events = calendar::fetch(&self.ivars().event_store);
 
-            let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-            let title = calendar::get_title(&events, &dismissed_set);
-            drop(dismissed_set);
+            let title = match self.ivars().dismissed_events.lock() {
+                Ok(dismissed_set) => {
+                    let title = calendar::get_title(&events, &dismissed_set);
+                    drop(dismissed_set);
+                    title
+                }
+                Err(_) => "Calendar".to_string(),
+            };
 
             let menu = build_menu(
                 events,
@@ -54,9 +59,14 @@ define_class!(
         fn did_wake_notification(&self, _notification: &NSNotification) {
             let events = calendar::fetch(&self.ivars().event_store);
 
-            let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-            let title = calendar::get_title(&events, &dismissed_set);
-            drop(dismissed_set);
+            let title = match self.ivars().dismissed_events.lock() {
+                Ok(dismissed_set) => {
+                    let title = calendar::get_title(&events, &dismissed_set);
+                    drop(dismissed_set);
+                    title
+                }
+                Err(_) => "Calendar".to_string(),
+            };
 
             let menu = build_menu(
                 events,
@@ -133,9 +143,14 @@ define_class!(
                     }
                 }
 
-                let dismissed_set = self.ivars().dismissed_events.lock().unwrap();
-                let title = calendar::get_title(&events, &dismissed_set);
-                drop(dismissed_set);
+                let title = match self.ivars().dismissed_events.lock() {
+                    Ok(dismissed_set) => {
+                        let title = calendar::get_title(&events, &dismissed_set);
+                        drop(dismissed_set);
+                        title
+                    }
+                    Err(_) => "Calendar".to_string(),
+                };
 
                 let menu = build_menu(
                     events,

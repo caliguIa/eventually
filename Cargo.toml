@@ -3,6 +3,14 @@ name = "eventually"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "eventually"
+path = "src/main.rs"
+
+[lib]
+name = "eventually"
+path = "src/lib.rs"
+
 [dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = [

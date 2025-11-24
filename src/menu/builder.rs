@@ -15,7 +15,6 @@ use super::delegate::MenuDelegate;
 use super::formatting;
 use super::icons;
 
-/// Builds the complete status bar menu with events and quick actions
 pub fn build_menu(
     events: Vec<EventInfo>,
     delegate: &MenuDelegate,
@@ -23,32 +22,23 @@ pub fn build_menu(
     mtm: MainThreadMarker,
 ) -> Retained<NSMenu> {
     let menu = app_kit::init_menu(mtm, ns_string!(""));
-
-    let current_or_next: Option<EventStatus> = {
-        let dismissed_set = dismissed.lock().unwrap();
-        find_cur_or_next(&events, &dismissed_set)
+    let current_or_next: Option<EventStatus> = match dismissed.lock() {
+        Ok(dismissed_set) => find_cur_or_next(&events, &dismissed_set),
+        Err(_) => None,
     };
-
-    // Add quick action items for current/next event
     if let Some(ref event_status) = current_or_next {
         add_quick_actions(&menu, event_status, delegate, mtm);
         menu.addItem(&NSMenuItem::separatorItem(mtm));
     }
-
-    // Add event list grouped by day
     if events.is_empty() {
         add_empty_state(&menu, mtm);
     } else {
         add_event_groups(&menu, &events, &current_or_next, dismissed, delegate, mtm);
     }
-
-    // Add quit item
     add_quit_item(&menu, mtm);
-
     menu
 }
 
-/// Adds quick action items (join video, open calendar, dismiss) for the current/next event
 fn add_quick_actions(
     menu: &NSMenu,
     event_status: &EventStatus,
@@ -56,30 +46,23 @@ fn add_quick_actions(
     mtm: MainThreadMarker,
 ) {
     let event = event_status.event();
-
-    // Add "Join <Service> Event" if there's a video URL
     if let Some(url) = extract_url(event.location.as_deref()) {
         add_join_video_item(menu, &url, delegate, mtm);
     }
-
-    // Add "Open in Calendar"
     add_open_calendar_item(menu, event, delegate, mtm);
-
-    // Add "Dismiss Event"
     add_dismiss_item(menu, event, delegate, mtm);
 }
 
-/// Adds "Join <Service> Event" menu item
 fn add_join_video_item(menu: &NSMenu, url: &str, delegate: &MenuDelegate, mtm: MainThreadMarker) {
     let service_info = get_service_info(url);
-    let join_title = format!("Join {} Event", service_info.name);
+    let join_title = format!("Join {} Event", service_info.name());
     let join_item = app_kit::init_menu_item(
         mtm,
         &NSString::from_str(&join_title),
         Some(objc2::sel!(openURL:)),
         ns_string!(""),
     );
-    if let Some(icon) = icons::load_icon(service_info.icon) {
+    if let Some(icon) = icons::load_icon(service_info.icon()) {
         join_item.setImage(Some(&icon));
     }
     app_kit::set_menu_item_target(&join_item, Some(delegate));
@@ -87,7 +70,6 @@ fn add_join_video_item(menu: &NSMenu, url: &str, delegate: &MenuDelegate, mtm: M
     menu.addItem(&join_item);
 }
 
-/// Adds "Open in Calendar" menu item
 fn add_open_calendar_item(
     menu: &NSMenu,
     event: &EventInfo,
@@ -112,7 +94,6 @@ fn add_open_calendar_item(
     menu.addItem(&calendar_item);
 }
 
-/// Adds "Dismiss Event" menu item
 fn add_dismiss_item(
     menu: &NSMenu,
     event: &EventInfo,
@@ -136,14 +117,12 @@ fn add_dismiss_item(
     menu.addItem(&dismiss_item);
 }
 
-/// Adds "No events" disabled menu item
 fn add_empty_state(menu: &NSMenu, mtm: MainThreadMarker) {
     let item = app_kit::init_menu_item(mtm, ns_string!("No events"), None, ns_string!(""));
     item.setEnabled(false);
     menu.addItem(&item);
 }
 
-/// Adds event groups organized by day (Today, Tomorrow, etc.)
 fn add_event_groups(
     menu: &NSMenu,
     events: &[EventInfo],
@@ -207,7 +186,6 @@ fn add_event_groups(
     }
 }
 
-/// Adds a day header (e.g., "Today, 22 Nov")
 fn add_day_header(menu: &NSMenu, day_name: &str, date_str: &str, mtm: MainThreadMarker) {
     let header_text = format!("{}, {}", day_name, date_str);
     let attr_string = formatting::create_attributed_string(&header_text);
@@ -222,7 +200,6 @@ fn add_day_header(menu: &NSMenu, day_name: &str, date_str: &str, mtm: MainThread
     menu.addItem(&header_item);
 }
 
-/// Adds a single event menu item with styled text and calendar color dot
 fn add_event_item(
     menu: &NSMenu,
     event: &EventInfo,
@@ -232,10 +209,12 @@ fn add_event_item(
     now: chrono::DateTime<Local>,
     mtm: MainThreadMarker,
 ) {
-    let is_dismissed = dismissed.lock().unwrap().contains(&event.occurrence_key);
+    let is_dismissed = dismissed
+        .lock()
+        .map(|set| set.contains(&event.occurrence_key))
+        .unwrap_or(false);
     let is_all_day = is_all_day(&event.start, &event.end);
 
-    // Build title with time prefix
     let time_prefix = if is_all_day {
         "All day:".to_string()
     } else {
@@ -247,19 +226,16 @@ fn add_event_item(
     let item_title = format!("{} {}", time_prefix, event.title);
     let attr_string = formatting::create_attributed_string(&item_title);
 
-    // Check if this is the current or next event
     let is_current_or_next = current_or_next
         .as_ref()
         .map(|status| status.event().occurrence_key == event.occurrence_key)
         .unwrap_or(false);
 
-    // Make current/next event bold
     if is_current_or_next {
         let full_range = NSRange::new(0, NSString::from_str(&item_title).length());
         formatting::apply_bold_font(&attr_string, full_range);
     }
 
-    // Dim the end time for non-all-day events
     if !is_all_day {
         let start_time_len = format_time(&event.start).chars().count();
         let dash_and_end_start = start_time_len + 1;
@@ -268,7 +244,6 @@ fn add_event_item(
         formatting::apply_secondary_color(&attr_string, end_time_range);
     }
 
-    // Dim past or dismissed events
     let is_past = event.end < now || is_dismissed;
     if is_past {
         let full_range = NSRange::new(0, NSString::from_str(&item_title).length());
@@ -283,7 +258,6 @@ fn add_event_item(
         }
     }
 
-    // Create menu item
     let item = app_kit::init_menu_item(
         mtm,
         ns_string!(""),
@@ -292,7 +266,6 @@ fn add_event_item(
     );
     app_kit::set_attributed_title(&item, &attr_string);
 
-    // Add calendar color dot
     let calendar_color = NSColor::colorWithSRGBRed_green_blue_alpha(
         event.calendar_color.0,
         event.calendar_color.1,
@@ -303,7 +276,6 @@ fn add_event_item(
         item.setImage(Some(&circle_icon));
     }
 
-    // Set target and action
     app_kit::set_menu_item_target(&item, Some(delegate));
     let open_data = format!("{}|||{}", event.event_id, event.has_recurrence);
     app_kit::set_menu_item_represented_object(&item, Some(&*NSString::from_str(&open_data)));
@@ -311,7 +283,6 @@ fn add_event_item(
     menu.addItem(&item);
 }
 
-/// Adds "Quit" menu item
 fn add_quit_item(menu: &NSMenu, mtm: MainThreadMarker) {
     let quit_item = app_kit::init_menu_item(
         mtm,

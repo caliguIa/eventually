@@ -54,10 +54,13 @@ fn main() {
         NSStatusBar::systemStatusBar().statusItemWithLength(NSVariableStatusItemLength);
 
     if let Some(button) = status_item.button(mtm) {
-        let dismissed_set = dismissed_events
-            .lock()
-            .expect("dismissed_events lock should not be poisoned");
-        let title = calendar::get_title(&events, &dismissed_set);
+        let title = match dismissed_events.lock() {
+            Ok(dismissed_set) => calendar::get_title(&events, &dismissed_set),
+            Err(e) => {
+                eprintln!("Failed to acquire dismissed events lock: {}", e);
+                "Calendar".to_string()
+            }
+        };
         button.setTitle(&NSString::from_str(&title));
     } else {
         eprintln!("status is should have button");
