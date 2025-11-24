@@ -1,7 +1,7 @@
 mod builder;
 mod delegate;
-mod formatting;
 mod icons;
+mod text;
 
 pub use builder::MenuBuilder;
 pub use delegate::MenuDelegate;

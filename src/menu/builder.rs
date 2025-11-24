@@ -11,7 +11,7 @@ use crate::calendar::{
 use crate::ffi::app_kit;
 
 use super::delegate::MenuDelegate;
-use super::formatting;
+use super::text;
 
 pub struct MenuBuilder<'a> {
     events: Vec<EventInfo>,
@@ -190,14 +190,14 @@ impl<'a> MenuBuilder<'a> {
 
     fn add_day_header(&self, menu: &NSMenu, day_name: &str, date_str: &str) {
         let header_text = format!("{}, {}", day_name, date_str);
-        let attr_string = formatting::create_attributed_string(&header_text);
+        let attr_string = text::AttributedString::new(&header_text);
 
         let day_name_ns = NSString::from_str(day_name);
         let day_name_range = NSRange::new(0, day_name_ns.length());
-        formatting::apply_bold_font(&attr_string, day_name_range);
+        attr_string.apply_bold(day_name_range);
 
         let header_item = app_kit::init_menu_item(self.mtm, ns_string!(""), None, ns_string!(""));
-        app_kit::set_attributed_title(&header_item, &attr_string);
+        app_kit::set_attributed_title(&header_item, attr_string.as_objc());
         header_item.setEnabled(false);
         menu.addItem(&header_item);
     }
@@ -228,7 +228,7 @@ impl<'a> MenuBuilder<'a> {
         };
 
         let item_title = format!("{} {}", time_prefix, event.title);
-        let attr_string = formatting::create_attributed_string(&item_title);
+        let attr_string = text::AttributedString::new(&item_title);
 
         let is_current_or_next = current_or_next
             .as_ref()
@@ -237,7 +237,7 @@ impl<'a> MenuBuilder<'a> {
 
         if is_current_or_next {
             let full_range = NSRange::new(0, NSString::from_str(&item_title).length());
-            formatting::apply_bold_font(&attr_string, full_range);
+            attr_string.apply_bold(full_range);
         }
 
         if !is_all_day {
@@ -245,20 +245,20 @@ impl<'a> MenuBuilder<'a> {
             let dash_and_end_start = start_time_len + 1;
             let end_time_with_dash_len = 2 + format_time(&event.end).chars().count();
             let end_time_range = NSRange::new(dash_and_end_start, end_time_with_dash_len);
-            formatting::apply_secondary_color(&attr_string, end_time_range);
+            attr_string.apply_secondary_color(end_time_range);
         }
 
         let is_past = event.end < now || is_dismissed;
         if is_past {
             let full_range = NSRange::new(0, NSString::from_str(&item_title).length());
-            formatting::apply_secondary_color(&attr_string, full_range);
+            attr_string.apply_secondary_color(full_range);
 
             if !is_all_day {
                 let start_time_len = format_time(&event.start).chars().count();
                 let dash_and_end_start = start_time_len + 1;
                 let end_time_with_dash_len = 2 + format_time(&event.end).chars().count();
                 let end_time_range = NSRange::new(dash_and_end_start, end_time_with_dash_len);
-                formatting::apply_tertiary_color(&attr_string, end_time_range);
+                attr_string.apply_tertiary_color(end_time_range);
             }
         }
 
@@ -268,7 +268,7 @@ impl<'a> MenuBuilder<'a> {
             Some(objc2::sel!(openEvent:)),
             ns_string!(""),
         );
-        app_kit::set_attributed_title(&item, &attr_string);
+        app_kit::set_attributed_title(&item, attr_string.as_objc());
 
         let calendar_color = NSColor::colorWithSRGBRed_green_blue_alpha(
             event.calendar_color.0,
