@@ -5,17 +5,16 @@ mod ffi;
 mod launchd;
 mod menu;
 
+use crate::event_observers::observe_system_notifs;
+use args::handle_args;
+use calendar::EventCollection;
+use menu::{MenuBuilder, MenuDelegate};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSStatusBar, NSVariableStatusItemLength,
 };
 use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-
-use args::handle_args;
-use menu::{build_menu, MenuDelegate};
-
-use crate::event_observers::observe_system_notifs;
 
 fn main() {
     use crate::ffi::event_kit;
@@ -32,7 +31,7 @@ fn main() {
     let mtm = match MainThreadMarker::new() {
         Some(mtm) => mtm,
         None => {
-            eprintln!("Must be called from main thread");
+            eprintln!("Error: Application must be called from main thread");
             std::process::exit(1);
         }
     };
@@ -42,12 +41,13 @@ fn main() {
 
     let event_store = event_kit::init_event_store(mtm);
     if let Err(e) = calendar::request_access(&event_store) {
-        eprintln!("Calendar access error: {}", e);
-        eprintln!("Please grant access in System Settings > Privacy & Security > Calendars");
-        return;
+        eprintln!("Error: Calendar access required but denied - {}", e);
+        eprintln!("Please grant calendar access in:");
+        eprintln!("  System Settings > Privacy & Security > Calendars");
+        std::process::exit(1);
     }
 
-    let events = calendar::fetch(&event_store);
+    let events = EventCollection::fetch(&event_store);
     let dismissed_events = Arc::new(Mutex::new(HashSet::new()));
 
     let status_item =
@@ -55,16 +55,16 @@ fn main() {
 
     if let Some(button) = status_item.button(mtm) {
         let title = match dismissed_events.lock() {
-            Ok(dismissed_set) => calendar::get_title(&events, &dismissed_set),
+            Ok(dismissed_set) => events.get_title(&dismissed_set),
             Err(e) => {
-                eprintln!("Failed to acquire dismissed events lock: {}", e);
+                eprintln!("Error: Failed to acquire lock on dismissed events: {}", e);
                 "Calendar".to_string()
             }
         };
         button.setTitle(&NSString::from_str(&title));
     } else {
-        eprintln!("status is should have button");
-        return;
+        eprintln!("Error: Status item button is unavailable");
+        std::process::exit(1);
     }
 
     let delegate = MenuDelegate::new(
@@ -74,7 +74,7 @@ fn main() {
         status_item.clone(),
     );
 
-    let menu = build_menu(events, &delegate, &dismissed_events, mtm);
+    let menu = MenuBuilder::new(events.into_vec(), &delegate, &dismissed_events, mtm).build();
     status_item.setMenu(Some(&menu));
 
     let notification_center = NSNotificationCenter::defaultCenter();

@@ -9,17 +9,24 @@ pub fn init_event_store(mtm: MainThreadMarker) -> Retained<EKEventStore> {
 pub fn request_calendar_access(store: &EKEventStore) -> bool {
     use block2::StackBlock;
     use std::sync::mpsc::channel;
+    use std::time::Duration;
 
     let (tx, rx) = channel();
     unsafe {
         store.requestFullAccessToEventsWithCompletion(&StackBlock::new(
-            move |granted: objc2::runtime::Bool, _error: *mut objc2_foundation::NSError| {
+            move |granted: objc2::runtime::Bool, error: *mut objc2_foundation::NSError| {
+                if !error.is_null() {
+                    eprintln!("Calendar access request error occurred");
+                }
                 let _ = tx.send(granted.as_bool());
             },
         ) as *const _ as *mut _);
     }
 
-    rx.recv().unwrap_or(false)
+    rx.recv_timeout(Duration::from_secs(30)).unwrap_or_else(|e| {
+        eprintln!("Calendar access request timed out or failed: {}", e);
+        false
+    })
 }
 
 pub fn fetch_events(store: &EKEventStore, start: &NSDate, end: &NSDate) -> Vec<Retained<EKEvent>> {

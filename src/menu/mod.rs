@@ -3,5 +3,5 @@ mod delegate;
 mod formatting;
 mod icons;
 
-pub use builder::build_menu;
+pub use builder::MenuBuilder;
 pub use delegate::MenuDelegate;

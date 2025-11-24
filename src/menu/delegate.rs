@@ -1,4 +1,3 @@
-use chrono;
 use objc2::rc::Retained;
 use objc2::{define_class, DeclaredClass};
 use objc2_app_kit::{NSMenuItem, NSStatusItem, NSWorkspace};
@@ -7,10 +6,10 @@ use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSU
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use crate::calendar;
+use crate::calendar::{EventCollection, SlackHuddleUrl};
 use crate::ffi::foundation::ns_menu_item_represented_object_to_string;
 use crate::init_objc_super;
-use crate::menu::build_menu;
+use crate::menu::MenuBuilder;
 
 pub struct Ivars {
     dismissed_events: Arc<Mutex<HashSet<String>>>,
@@ -28,60 +27,12 @@ define_class!(
     impl MenuDelegate {
         #[unsafe(method(eventStoreChanged:))]
         fn event_store_changed(&self, _notification: &NSNotification) {
-            let events = calendar::fetch(&self.ivars().event_store);
-
-            let title = match self.ivars().dismissed_events.lock() {
-                Ok(dismissed_set) => {
-                    let title = calendar::get_title(&events, &dismissed_set);
-                    drop(dismissed_set);
-                    title
-                }
-                Err(_) => "Calendar".to_string(),
-            };
-
-            let menu = build_menu(
-                events,
-                self,
-                &self.ivars().dismissed_events,
-                self.ivars().mtm,
-            );
-
-            let status_item = &self.ivars().status_item;
-
-            if let Some(button) = status_item.button(self.ivars().mtm) {
-                button.setTitle(&NSString::from_str(&title));
-            }
-
-            status_item.setMenu(Some(&menu));
+            self.refresh_menu();
         }
 
         #[unsafe(method(didWakeNotification:))]
         fn did_wake_notification(&self, _notification: &NSNotification) {
-            let events = calendar::fetch(&self.ivars().event_store);
-
-            let title = match self.ivars().dismissed_events.lock() {
-                Ok(dismissed_set) => {
-                    let title = calendar::get_title(&events, &dismissed_set);
-                    drop(dismissed_set);
-                    title
-                }
-                Err(_) => "Calendar".to_string(),
-            };
-
-            let menu = build_menu(
-                events,
-                self,
-                &self.ivars().dismissed_events,
-                self.ivars().mtm,
-            );
-
-            let status_item = &self.ivars().status_item;
-
-            if let Some(button) = status_item.button(self.ivars().mtm) {
-                button.setTitle(&NSString::from_str(&title));
-            }
-
-            status_item.setMenu(Some(&menu));
+            self.refresh_menu();
         }
 
         #[unsafe(method(openEvent:))]
@@ -90,6 +41,10 @@ define_class!(
                 let data = ns_menu_item_represented_object_to_string(&obj);
 
                 let parts: Vec<&str> = data.split("|||").collect();
+                if parts.is_empty() {
+                    eprintln!("Error: Invalid event data format");
+                    return;
+                }
                 let event_id = parts[0];
                 let has_recurrence = parts.get(1).map(|s| *s == "true").unwrap_or(false);
 
@@ -101,6 +56,8 @@ define_class!(
 
                 if let Some(url) = NSURL::URLWithString(&NSString::from_str(&url_string)) {
                     NSWorkspace::sharedWorkspace().openURL(&url);
+                } else {
+                    eprintln!("Error: Failed to create URL for event: {}", url_string);
                 }
             }
         }
@@ -111,8 +68,8 @@ define_class!(
                 let url_string = ns_menu_item_represented_object_to_string(&obj);
 
                 let final_url = if url_string.contains("slack") {
-                    if let Some(captures) = extract_slack_huddle_ids(&url_string) {
-                        format!("slack://join-huddle?team={}&id={}", captures.0, captures.1)
+                    if let Some(huddle) = SlackHuddleUrl::parse(&url_string) {
+                        huddle.to_native_url()
                     } else {
                         url_string
                     }
@@ -123,6 +80,8 @@ define_class!(
                 if let Some(url) = NSURL::URLWithString(&NSString::from_str(&final_url)) {
                     let workspace = NSWorkspace::sharedWorkspace();
                     workspace.openURL(&url);
+                } else {
+                    eprintln!("Error: Failed to create URL from: {}", final_url);
                 }
             }
         }
@@ -132,59 +91,18 @@ define_class!(
             if let Some(obj) = sender.representedObject() {
                 let event_id_string = ns_menu_item_represented_object_to_string(&obj);
 
-
                 if let Ok(mut dismissed) = self.ivars().dismissed_events.lock() {
                     dismissed.insert(event_id_string.clone());
+                } else {
+                    eprintln!("Error: Failed to acquire lock when dismissing event");
+                    return;
                 }
 
-                let events = calendar::fetch(&self.ivars().event_store);
-                for e in &events {
-                    if e.start.date_naive() == chrono::Local::now().date_naive() {
-                    }
-                }
-
-                let title = match self.ivars().dismissed_events.lock() {
-                    Ok(dismissed_set) => {
-                        let title = calendar::get_title(&events, &dismissed_set);
-                        drop(dismissed_set);
-                        title
-                    }
-                    Err(_) => "Calendar".to_string(),
-                };
-
-                let menu = build_menu(
-                    events,
-                    self,
-                    &self.ivars().dismissed_events,
-                    self.ivars().mtm,
-                );
-
-                let status_item = &self.ivars().status_item;
-
-                if let Some(button) = status_item.button(self.ivars().mtm) {
-                    button.setTitle(&NSString::from_str(&title));
-                }
-
-                status_item.setMenu(Some(&menu));
+                self.refresh_menu();
             }
         }
     }
 );
-
-fn extract_slack_huddle_ids(url: &str) -> Option<(String, String)> {
-    if url.contains("/huddle/") {
-        let parts: Vec<&str> = url.split('/').collect();
-        if let Some(huddle_idx) = parts.iter().position(|&p| p == "huddle") {
-            if huddle_idx + 2 < parts.len() {
-                let team = parts[huddle_idx + 1].to_string();
-                let channel = parts[huddle_idx + 2].to_string();
-                return Some((team, channel));
-            }
-        }
-    }
-
-    None
-}
 
 impl MenuDelegate {
     pub fn new(
@@ -201,5 +119,33 @@ impl MenuDelegate {
             status_item,
         });
         init_objc_super!(this)
+    }
+
+    fn refresh_menu(&self) {
+        let events = EventCollection::fetch(&self.ivars().event_store);
+
+        let title = match self.ivars().dismissed_events.lock() {
+            Ok(dismissed_set) => events.get_title(&dismissed_set),
+            Err(e) => {
+                eprintln!("Error: Failed to acquire lock in refresh_menu: {}", e);
+                "Calendar".to_string()
+            }
+        };
+
+        let menu = MenuBuilder::new(
+            events.into_vec(),
+            self,
+            &self.ivars().dismissed_events,
+            self.ivars().mtm,
+        )
+        .build();
+
+        let status_item = &self.ivars().status_item;
+
+        if let Some(button) = status_item.button(self.ivars().mtm) {
+            button.setTitle(&NSString::from_str(&title));
+        }
+
+        status_item.setMenu(Some(&menu));
     }
 }

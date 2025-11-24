@@ -11,10 +11,16 @@ pub fn load_icon(name: &str) -> Option<Retained<NSImage>> {
         "slack" => include_bytes!("../../assets/icons/slack.svg"),
         "teams" => include_bytes!("../../assets/icons/teams.svg"),
         "video" => include_bytes!("../../assets/icons/video.svg"),
-        _ => return None,
+        _ => {
+            eprintln!("Warning: Unknown icon requested: {}", name);
+            return None;
+        }
     };
     let data = objc2_foundation::NSData::with_bytes(icon_data);
-    let image = app_kit::init_image_from_data(&data)?;
+    let image = app_kit::init_image_from_data(&data).or_else(|| {
+        eprintln!("Error: Failed to create image from icon data: {}", name);
+        None
+    })?;
     let size = objc2_foundation::NSSize::new(16.0, 16.0);
     app_kit::set_image_properties(&image, size, true);
     Some(image)

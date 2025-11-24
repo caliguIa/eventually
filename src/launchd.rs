@@ -47,22 +47,44 @@ impl Service {
         let plist_path = self.plist_path()?;
         if self.is_installed() {
             eprintln!(
-                "existing launch agent detected at `{}`, skipping installation",
+                "Warning: Existing launch agent detected at `{}`, skipping installation",
                 plist_path.display()
             );
             return Ok(());
         }
 
         if let Some(parent) = plist_path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to create LaunchAgents directory: {}", e),
+                )
+            })?;
         }
 
         if let Some(parent) = self.log_path("log")?.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to create log directory: {}", e),
+                )
+            })?;
         }
 
-        let mut plist = fs::File::create(&plist_path)?;
-        plist.write_all(self.launchd_plist()?.as_bytes())?;
+        let mut plist = fs::File::create(&plist_path).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to create plist file: {}", e),
+            )
+        })?;
+        plist
+            .write_all(self.launchd_plist()?.as_bytes())
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to write plist file: {}", e),
+                )
+            })?;
         println!("installed launch agent to `{}`", plist_path.display());
         Ok(())
     }
@@ -71,17 +93,22 @@ impl Service {
         let plist_path = self.plist_path()?;
         if !self.is_installed() {
             eprintln!(
-                "no launch agent detected at `{}`, skipping uninstallation",
+                "Warning: No launch agent detected at `{}`, skipping uninstallation",
                 plist_path.display(),
             );
             return Ok(());
         }
 
         if let Err(e) = self.stop() {
-            eprintln!("failed to stop service: {e:?}");
+            eprintln!("Warning: Failed to stop service during uninstall: {}", e);
         }
 
-        fs::remove_file(&plist_path)?;
+        fs::remove_file(&plist_path).map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to remove plist file: {}", e),
+            )
+        })?;
         println!(
             "removed existing launch agent at `{}`",
             plist_path.display()
@@ -90,7 +117,9 @@ impl Service {
     }
 
     pub fn restart(&self) -> Result<()> {
-        self.stop()?;
+        if let Err(e) = self.stop() {
+            eprintln!("Warning: Failed to stop service during restart: {}", e);
+        }
         self.start()
     }
 
@@ -103,7 +132,13 @@ impl Service {
         let output = Command::new("launchctl")
             .arg("load")
             .arg(self.plist_path()?)
-            .output()?;
+            .output()
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to execute launchctl: {}", e),
+                )
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -126,7 +161,13 @@ impl Service {
         let output = Command::new("launchctl")
             .arg("unload")
             .arg(self.plist_path()?)
-            .output()?;
+            .output()
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to execute launchctl: {}", e),
+                )
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

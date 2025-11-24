@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ServiceInfo {
     Slack,
@@ -8,6 +10,20 @@ pub enum ServiceInfo {
 }
 
 impl ServiceInfo {
+    pub fn from_url(url: &str) -> Self {
+        if url.contains("slack.com") {
+            Self::Slack
+        } else if url.contains("zoom.us") {
+            Self::Zoom
+        } else if url.contains("meet.google") {
+            Self::GoogleMeet
+        } else if url.contains("teams.microsoft.com") || url.contains("teams.live.com") {
+            Self::MicrosoftTeams
+        } else {
+            Self::Generic
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Self::Slack => "Slack",
@@ -29,22 +45,37 @@ impl ServiceInfo {
     }
 }
 
-pub fn detect_service(url: &str) -> ServiceInfo {
-    if url.contains("slack.com") {
-        ServiceInfo::Slack
-    } else if url.contains("zoom.us") {
-        ServiceInfo::Zoom
-    } else if url.contains("meet.google") {
-        ServiceInfo::GoogleMeet
-    } else if url.contains("teams.microsoft.com") || url.contains("teams.live.com") {
-        ServiceInfo::MicrosoftTeams
-    } else {
-        ServiceInfo::Generic
-    }
-}
-
 pub fn extract_url(location: Option<&str>) -> Option<&str> {
     location.filter(|loc| loc.starts_with("http://") || loc.starts_with("https://"))
+}
+
+pub struct SlackHuddleUrl<'a> {
+    team: Cow<'a, str>,
+    channel: Cow<'a, str>,
+}
+
+impl<'a> SlackHuddleUrl<'a> {
+    pub fn parse(url: &'a str) -> Option<Self> {
+        if !url.contains("/huddle/") {
+            return None;
+        }
+
+        let parts: Vec<&str> = url.split('/').collect();
+        let huddle_idx = parts.iter().position(|&p| p == "huddle")?;
+
+        if huddle_idx + 2 >= parts.len() {
+            return None;
+        }
+
+        Some(Self {
+            team: Cow::Borrowed(parts[huddle_idx + 1]),
+            channel: Cow::Borrowed(parts[huddle_idx + 2]),
+        })
+    }
+
+    pub fn to_native_url(&self) -> String {
+        format!("slack://join-huddle?team={}&id={}", self.team, self.channel)
+    }
 }
 
 #[cfg(test)]
@@ -52,49 +83,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_slack() {
+    fn test_service_from_url_slack() {
         assert_eq!(
-            detect_service("https://slack.com/huddle/T123/C456"),
+            ServiceInfo::from_url("https://slack.com/huddle/T123/C456"),
             ServiceInfo::Slack
         );
     }
 
     #[test]
-    fn test_detect_zoom() {
+    fn test_service_from_url_zoom() {
         assert_eq!(
-            detect_service("https://zoom.us/j/123456789"),
+            ServiceInfo::from_url("https://zoom.us/j/123456789"),
             ServiceInfo::Zoom
         );
     }
 
     #[test]
-    fn test_detect_google_meet() {
+    fn test_service_from_url_google_meet() {
         assert_eq!(
-            detect_service("https://meet.google.com/abc-defg-hij"),
+            ServiceInfo::from_url("https://meet.google.com/abc-defg-hij"),
             ServiceInfo::GoogleMeet
         );
     }
 
     #[test]
-    fn test_detect_teams_microsoft() {
+    fn test_service_from_url_teams_microsoft() {
         assert_eq!(
-            detect_service("https://teams.microsoft.com/l/meetup/..."),
+            ServiceInfo::from_url("https://teams.microsoft.com/l/meetup/..."),
             ServiceInfo::MicrosoftTeams
         );
     }
 
     #[test]
-    fn test_detect_teams_live() {
+    fn test_service_from_url_teams_live() {
         assert_eq!(
-            detect_service("https://teams.live.com/meet/..."),
+            ServiceInfo::from_url("https://teams.live.com/meet/..."),
             ServiceInfo::MicrosoftTeams
         );
     }
 
     #[test]
-    fn test_detect_generic() {
+    fn test_service_from_url_generic() {
         assert_eq!(
-            detect_service("https://example.com/video"),
+            ServiceInfo::from_url("https://example.com/video"),
             ServiceInfo::Generic
         );
     }
@@ -142,5 +173,29 @@ mod tests {
     #[test]
     fn test_extract_url_empty() {
         assert_eq!(extract_url(Some("")), None);
+    }
+
+    #[test]
+    fn test_slack_huddle_url_parse() {
+        let url = "https://slack.com/huddle/T123ABC/C456DEF";
+        let huddle = SlackHuddleUrl::parse(url).expect("Should parse slack huddle URL");
+        assert_eq!(huddle.team.as_ref(), "T123ABC");
+        assert_eq!(huddle.channel.as_ref(), "C456DEF");
+    }
+
+    #[test]
+    fn test_slack_huddle_url_to_native() {
+        let url = "https://slack.com/huddle/T123ABC/C456DEF";
+        let huddle = SlackHuddleUrl::parse(url).expect("Should parse slack huddle URL");
+        assert_eq!(
+            huddle.to_native_url(),
+            "slack://join-huddle?team=T123ABC&id=C456DEF"
+        );
+    }
+
+    #[test]
+    fn test_slack_huddle_url_parse_invalid() {
+        assert!(SlackHuddleUrl::parse("https://slack.com/messages").is_none());
+        assert!(SlackHuddleUrl::parse("https://slack.com/huddle/T123").is_none());
     }
 }
