@@ -32,6 +32,8 @@ define_class!(
 
         #[unsafe(method(didWakeNotification:))]
         fn did_wake_notification(&self, _notification: &NSNotification) {
+            // Delay slightly to ensure system time has stabilized after wake
+            std::thread::sleep(std::time::Duration::from_millis(100));
             self.refresh_menu();
         }
 
