@@ -2,7 +2,8 @@ use objc2::rc::Retained;
 use objc2::{define_class, DeclaredClass};
 use objc2_app_kit::{NSMenuItem, NSStatusItem, NSWorkspace};
 use objc2_event_kit::EKEventStore;
-use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSURL};
+use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSString, NSTimer, NSURL};
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -16,6 +17,7 @@ pub struct Ivars {
     mtm: MainThreadMarker,
     event_store: Retained<EKEventStore>,
     status_item: Retained<NSStatusItem>,
+    timer: Cell<Option<Retained<NSTimer>>>,
 }
 
 define_class!(
@@ -34,6 +36,11 @@ define_class!(
         fn did_wake_notification(&self, _notification: &NSNotification) {
             // Delay slightly to ensure system time has stabilized after wake
             std::thread::sleep(std::time::Duration::from_millis(100));
+            self.refresh_menu();
+        }
+
+        #[unsafe(method(timerFired:))]
+        fn timer_fired(&self, _timer: &NSTimer) {
             self.refresh_menu();
         }
 
@@ -119,8 +126,23 @@ impl MenuDelegate {
             mtm,
             event_store,
             status_item,
+            timer: Cell::new(None),
         });
-        init_objc_super!(this)
+        let delegate: Retained<Self> = init_objc_super!(this);
+        
+        // Create a timer that fires every 60 seconds to refresh the title
+        unsafe {
+            let timer = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                60.0,
+                &delegate,
+                objc2::sel!(timerFired:),
+                None,
+                true,
+            );
+            delegate.ivars().timer.set(Some(timer));
+        }
+        
+        delegate
     }
 
     fn refresh_menu(&self) {
