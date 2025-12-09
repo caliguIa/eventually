@@ -14,11 +14,24 @@ pub fn is_all_day(start: &DateTime<Local>, end: &DateTime<Local>) -> bool {
 }
 
 pub fn format_event_title(title: &str, duration: Duration, template: &str) -> String {
+    let secs = duration.num_seconds();
     let mins = duration.num_minutes();
+    
     let time_str = if mins > 60 {
-        format!("{}h", mins / 60)
+        let hours = mins / 60;
+        let remaining_mins = mins % 60;
+        if remaining_mins >= 30 {
+            format!("{}h", hours + 1)
+        } else {
+            format!("{}h", hours)
+        }
     } else {
-        format!("{}m", mins)
+        let remaining_secs = secs % 60;
+        if remaining_secs >= 30 {
+            format!("{}m", mins + 1)
+        } else {
+            format!("{}m", mins)
+        }
     };
 
     let overhead = template.len() - 4 + time_str.len();
